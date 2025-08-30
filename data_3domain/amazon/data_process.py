@@ -128,12 +128,13 @@ def Amazon_meta(dataset_name, data_maps):
     --"categories": [["Sports & Outdoors", "Other Sports", "Dance"]]
     '''
     datas = {}
-    meta_flie = './raw/meta_' + str(dataset_name) + '.json'
-    item_asins = set(data_maps['str2id'].keys()) # 高速なルックアップのためにセットに変換
+    meta_flie = './raw/meta_' + str(dataset_name) + '.json.gz'
+    item_asins = list(data_maps['str2id'].keys())
 
-    for info in parse_meta(meta_flie):
-        if info.get('asin') in item_asins:
-            datas[info['asin']] = info
+    for info in tqdm(parse_meta(meta_flie)):
+        if info['asin'] not in item_asins:
+            continue
+        datas[info['asin']] = info
     return datas
 
 def Yelp(date_min, date_max, rating_score): # take out inters in [date_min, date_max] and the score < rating_score
