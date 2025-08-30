@@ -11,7 +11,7 @@ import requests
 
 # %%
 dataset = "amazon"
-inter_file = "cloth_sport"
+inter_file = "cloth_sport_fashion"
 all_file = "itm_emb_np"
 domainA_file = "{}_A".format(all_file) # domain A file
 domainB_file = "{}_B".format(all_file) # domain B file
