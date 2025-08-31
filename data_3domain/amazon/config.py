@@ -11,6 +11,9 @@ USER_CORE = 5
 ITEM_CORE = 3
 INTER_FILE_NAME  = "cloth_sport_fashion.pkl"
 
+TIME_MIN = 1514736000  # 2018-01-01 00:00:00 GMT
+TIME_MAX = 1577808000  # 2020-01-01 00:00:00 GMT
+
 ITEM_PROMPT_TEMPLATE = "The fashion item has following attributes: \n name is <TITLE>; brand is <BRAND>; price is <PRICE>."
 
 NUM_CLUSTERS = 10
