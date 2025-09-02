@@ -1,9 +1,10 @@
 import os 
 import config
-from llm_servcies import LocalSummarizer, LocalEmbedder
+
+from llm_services import LocalSummarizer, LocalEmbedder
 from step1_data_processor import AmazonHandler
 from step2_feature_extractor import ItemFeatureExtractor
-from ste3_user_profiler import UserProfiler
+from step3_user_profiler import UserProfiler
 
 def main():
     print("=" * 50)
@@ -48,3 +49,18 @@ def main():
     print("Step 2 finished")
     
     print("Running step3 User Profiling ")
+
+    step3_output_path = os.path.join(config.HANDLE_DATA_DIR, "usr_profile_emb_final.pkl")
+    if not os.path.exists(step3_output_path):
+        user_profiler = UserProfiler(summarizer, embedder)
+        user_profiler.run_pipeline()
+        print("Step 3 finished")
+    else:
+        print(f"Step 3: User profile already processed and saved to {step3_output_path}")
+
+    print("=" * 50)
+    print("=== Full Pipeline Finished Successfully ===")
+    print("=" * 50)
+
+if __name__ == "__main__":
+    main()
