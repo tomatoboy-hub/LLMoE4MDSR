@@ -182,7 +182,7 @@ class UserProfiler:
             processing_function = self._generate_embedding)
 
         emb_list = []
-        for user_id sorterd(self.user_embeddings.keys()):
+        for user_id in sorted(self.user_embeddings.keys()):
             embedding = self.user_embeddings[user_id]
             if embedding is not None and len(embedding) > 0:
                 emb_list.append(embedding)
