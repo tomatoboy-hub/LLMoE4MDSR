@@ -57,10 +57,10 @@ def Amazon(dataset_name, rating_score):
     '''
     datas = []
     # older Amazon
-    data_flie = './data/' + str(dataset_name) + '/raw/' + str(dataset_name) + '.json.gz'
+    data_file = './data/' + str(dataset_name) + '/raw/' + str(dataset_name) + '.json.gz'
     # latest Amazon
     # data_flie = '/home/hui_wang/data/new_Amazon/' + dataset_name + '.json.gz'
-    for inter in parse(data_flie):
+    for inter in parse(data_file):
         if float(inter['overall']) <= rating_score: # 小于一定分数去掉
             continue
         user = inter['reviewerID']
@@ -68,6 +68,39 @@ def Amazon(dataset_name, rating_score):
         time = inter['unixReviewTime']
         datas.append((user, item, int(time)))
     return datas
+
+
+def stream_amazon_reviews_to_parquet(dataset_name:str,rating_score:float,chunk_size:int=100000):
+    print(f"Streaming {dataset_name} to parquet in chunks of {chunk_size}")
+
+    writer = None
+    chunk_data_list = []
+    data_file = './data/' + str(dataset_name) + '/raw/' + str(dataset_name) + '.json.gz'
+    for inter in parse(data_file):
+        if float(inter['overall']) <= rating_score: # 小于一定分数去掉
+            continue
+        chunk_data_list.append({
+            'user':inter['reviewerID'],
+            'item':inter['asin'],
+            'time':inter['unixReviewTime']
+        })
+        if len(chunk_data_list) >= chunk_size:
+            df_chunk = pd.DataFrame(chunk_data_list)
+            table = pa.Table.from_pandas(df_chunk)
+            if writer is None:
+                writer = pq.ParquetWriter(f'./data/{dataset_name}/raw/{dataset_name}.parquet',table.schema)
+            writer.write_table(table)
+            chunk_data_list = []
+
+    if chunk_data_list:
+        df_chunk = pd.DataFrame(chunk_data_list)
+        table = pa.Table.from_pandas(df_chunk)
+        if writer is None:
+            writer = pq.ParquetWriter(f'./data/{dataset_name}/raw/{dataset_name}.parquet',table.schema)
+        writer.write_table(table)
+    if writer:
+        writer.close()
+    print(f"Streaming {dataset_name} to parquet in chunks of {chunk_size} completed")
 
 
 def New_Amazon(dataset_name, rating_score):

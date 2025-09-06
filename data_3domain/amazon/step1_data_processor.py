@@ -4,9 +4,9 @@ import numpy as np
 from tqdm import tqdm
 import pickle
 import json
-from data_process import New_Amazon, Amazon_meta
+from data_process import New_Amazon, Amazon_meta, stream_amazon_reviews_to_parquet
 from collections import defaultdict
-
+import pandas as pd
 import config
 
 class AmazonHandler():
@@ -14,7 +14,8 @@ class AmazonHandler():
         self.domains_map = config.DOMAINS
         self.user_core = config.USER_CORE
         self.item_core = config.ITEM_CORE
-        
+
+        self.df = pd.DataFrame()
         # クラス内で使用する変数をすべて初期化
         self.data = []
         self.new_data = []
@@ -34,6 +35,8 @@ class AmazonHandler():
         
         print("--- 1.2 : Filtering Data by Time ---")
         self.filter_time(t_min=config.TIME_MIN, t_max = config.TIME_MAX)
+
+        self.filter_Kcore(user_core=self.user_core, item_core=self.item_core)
 
         print("--- 1.3 : Counting Interactions ---")
         self.id_map()
@@ -78,6 +81,24 @@ class AmazonHandler():
         self.data = all_data
         print(f"Data loaded. Total:{len(self.data)} interactions")
 
+    def _load_and_combine_data(self):
+        all_dfs = []
+        for domein_id_str, domain_name in self.domains_map.items():
+            parquet_path = f'./raw/{domain_name}.parquet'
+            if not os.path.exists(parquet_path):
+                print(f"Parquet file not found for domain {domain_name}")
+                stream_amazon_reviews_to_parquet(domain_name,rating_score=0)
+            else:
+                print("Found parquet file for domain {domain_name}")
+            
+            df_domain = pd.read_parquet(parquet_path)
+            df_domain['domain_id'] = int(domein_id_str)
+            all_dfs.append(df_domain)
+        
+        self.df["time"]
+        return df_combined
+    
+            
     def filter_time(self,t_min=1451577600, t_max=1459440000):   # 过滤掉交互少的数据
         new_data = []
 
@@ -226,7 +247,7 @@ class AmazonHandler():
             print(f"K-core filter done!. Interactions remaining: { len(self.data) }")
 
         final_domain_set = {i : {"user": set(), "item": set()} for i in range(len(self.domains))}
-        for user_id, item_id, _, domain_in in self.data:
+        for user_id, item_id, _, domain_id in self.data:
             final_domain_set[domain_id]["user"].add(user_id)
             final_domain_set[domain_id]["item"].add(item_id)
         

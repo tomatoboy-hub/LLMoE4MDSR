@@ -1,5 +1,5 @@
 RAW_DATA_DIR = "./raw"
-HANDLE_DATA_DIR = "./handled"
+HANDLE_DATA_DIR = "./handled_test"
 
 DOMAINS = {
     "0":"Clothing_Shoes_and_Jewelry",
