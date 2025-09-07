@@ -14,16 +14,6 @@ class ItemFeatureExtractor:
         self.embedder = embedder
         self.id_map_full = json.load(open(os.path.join(config.HANDLE_DATA_DIR, "id_map.json"), "r"))
 
-    def _build_prompts(self, raw_meta:dict):
-        item_prompts = []
-        for key,value in tqdm(raw_meta.items(),desc="Building prompts"):
-            item_str = copy.deepcopy(config.ITEM_PROMPT_TEMPLATE)
-            for attr in ["title", "brand", "date","price"]:
-                attr_val = value.get(attr,"unknown")
-                item_str = item_str.replace(f"<{attr.upper()}>",str(attr_val)[:100])
-            item_prompts[key] = item_str
-        return item_prompts
-
     def _build_prompts_from_parquet(self, meta_df:pd.DataFrame,formatted_template:str):
         item_prompts = {}
         for index, row in tqdm(meta_df.iterrows(),total=len(meta_df),desc="Building prompts from parquet"):
