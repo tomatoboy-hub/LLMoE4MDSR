@@ -64,10 +64,10 @@ class AmazonHandler():
             output_path=f"{config.HANDLE_DATA_DIR}/cloth_sport_fashion.pkl"
         )
 
-        self.fetch_metadata(
-            domain_ids=[0, 1, 2],
-            output_path=f"{config.HANDLE_DATA_DIR}/"
-        )
+        # self.fetch_metadata(
+        #     domain_ids=[0, 1, 2],
+        #     output_path=f"{config.HANDLE_DATA_DIR}/"
+        # )
 
         print("\n--- Processing Summary ---")
 
@@ -391,6 +391,7 @@ class AmazonHandler():
         for domain_id in domain_ids:
             meta_data = Amazon_meta(self.domains_map[str(domain_id)], self.item_dict[domain_id])
             json_str = json.dumps(meta_data)
+
             with open(f"`{output_path}item2attributes_{domain_id}.json", 'w') as out:
                 out.write(json_str)
         return

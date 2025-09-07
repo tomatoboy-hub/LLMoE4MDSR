@@ -23,7 +23,7 @@ USER_PROFILE_PROMPTS = {
 }
 
 
-SUMMARIZATION_MODEL = "meta-llama/Llama-3-8B-Instruct"
+SUMMARIZATION_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
 EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
 
 

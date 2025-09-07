@@ -1,18 +1,26 @@
 import torch 
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, AutoModel
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, AutoModel, BitsAndBytesConfig
+import numpy as np
 
 class LocalSummarizer:
     def __init__(self, model_name:str, use4bit:bool=False):
         print(f"Initializing LocalSummarizer with model {model_name} and use4bit {use4bit}")
 
         model_kwargs = {"device_map":"auto"}
+        quantization_config = None
         if use4bit:
-            model_kwargs["load_in_4bit"] = True
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
         
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
 
-        self.pipeline = pipeline("text-generation", model=model, tokenizer=self.tokeninzer)
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quantization_config,device_map="auto")
+
+        self.pipeline = pipeline("text-generation", model=model, tokenizer=self.tokenizer)
         print("Summarizer \n")
 
     def summarize(self, prompt_text: str, max_new_tokens: int=150):
@@ -28,7 +36,7 @@ class LocalEmbedder:
     def __init__(self,model_name:str):
         print(f"Initializing LocalEmbedder with model {model_name}")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
         self.model = AutoModel.from_pretrained(model_name).to(self.device).eval()
         print("Embedder \n")
 
@@ -40,10 +48,10 @@ class LocalEmbedder:
             for i in range(0, len(texts_with_prefix),batch_size):
                 batch = self.tokenizer(
                     texts_with_prefix[i:i + batch_size],
-                    padding=True, trancation=True, return_tensors="pt", max_length=512,
+                    padding=True,truncation=True, return_tensors="pt", max_length=512,
                 ).to(self.device)
 
-                outputs = self.mdoel(**batch)
+                outputs = self.model(**batch)
                 last_hidden = outputs.last_hidden_state
                 attention_mask = batch["attention_mask"]
                 masked_hidden = last_hidden.masked_fill(~attention_mask[..., None].bool(),0.0)
@@ -52,6 +60,6 @@ class LocalEmbedder:
                 embeddings = sum_hidden / sum_mask
 
                 normalized_embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-                all_embeddings.append(normalized_embeddings.cpu().numpy())
+                all_embeddings.extend(normalized_embeddings.cpu().numpy())
 
         return np.array(all_embeddings)

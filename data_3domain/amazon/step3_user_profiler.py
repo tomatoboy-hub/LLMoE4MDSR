@@ -14,7 +14,7 @@ class UserProfiler:
         self.embedder = embedder
         self.summarizer = summarizer
         self.n_clusters = config.NUM_CLUSTERS
-        self.handled_dir = config.HANDLED_DIR
+        self.handled_dir = config.HANDLE_DATA_DIR
         
         # データを格納するインスタンス変数
         self.llm_emb = None
@@ -38,7 +38,7 @@ class UserProfiler:
         all_titles = []
         for domain_key in sorted(config.DOMAINS.keys()):
             emb_path = os.path.join(self.handled_dir, f"item_emb_{domain_key}.pkl")
-            title_path = os.path.join(self.handled_dir, f"titie_{domain_key}.json")
+            title_path = os.path.join(self.handled_dir, f"title_{domain_key}.json")
             all_embs.append(pickle.load(open(emb_path,"rb")))
             all_titles.extend(pickle.load(open(title_path,"rb")))
         self.llm_emb = np.concatenate(all_embs)
