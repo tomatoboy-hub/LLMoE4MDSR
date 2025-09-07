@@ -46,7 +46,7 @@ class ItemFeatureExtractor:
         filtered_meta_df = meta_df[meta_df['asin'].isin(required_asins)]
 
         item_prompts = self._build_prompts_from_parquet(filtered_meta_df)
-        emb_cache_path = os.path.join(config.HANDLE_DATA_DIR, f"item_emb_{domain_key}.pkl")
+        emb_cache_path = os.path.join(config.HANDLE_DATA_DIR, f"item_emb_cache_{domain_key}.pkl")
         item_embeddings = {}
         if os.path.exists(emb_cache_path):
             item_embeddings = pickle.load(open(emb_cache_path, "rb"))

@@ -38,7 +38,7 @@ class UserProfiler:
         all_titles = []
         for domain_key in sorted(config.DOMAINS.keys()):
             emb_path = os.path.join(self.handled_dir, f"item_emb_{domain_key}.pkl")
-            title_path = os.path.join(self.handled_dir, f"title_{domain_key}.json")
+            title_path = os.path.join(self.handled_dir, f"title_{domain_key}.pkl")
             all_embs.append(pickle.load(open(emb_path,"rb")))
             all_titles.extend(pickle.load(open(title_path,"rb")))
         self.llm_emb = np.concatenate(all_embs)
@@ -129,7 +129,7 @@ class UserProfiler:
             temp_meta_inter = meta_inter[-15:] if len(meta_inter) > 15 else meta_inter
             
             # IDを商品タイトルに変換
-            inter_str = "\n".join([title_list[item_id - 1] for item_id in temp_meta_inter])
+            inter_str = "\n".join(self.title_list[item_id - 1] for item_id in temp_meta_inter)
             
             pref_prompt = prompt_template["analyzer"].format(inter_str)
             try:
