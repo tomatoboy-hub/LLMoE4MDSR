@@ -181,7 +181,7 @@ class UserProfiler:
                     partition_inter[cluster_id].append(item_id)
             self.partitioned_user_inter[user] = partition_inter
         print("User interactions partitioned")
-        
+
         
     def run_pipeline(self):
         self._load_data()
@@ -192,13 +192,13 @@ class UserProfiler:
         user_profile_path = os.path.join(self.handled_dir, "user_profile.pkl")
         self.user_profiles = self._process_items_with_resume(
             source_dict = self.partitioned_user_inter,
-            save_file_path = user_profile_path,
+            save_filepath = user_profile_path,
             processing_function = self._generate_user_profile)
         
         user_emb_path = os.path.join(self.handled_dir, "user_profile_emb.pkl")
         self.user_embeddings = self._process_items_with_resume(
             source_dict = self.user_profiles,
-            save_file_path = user_emb_path,
+            save_filepath = user_emb_path,
             processing_function = self._generate_embedding)
 
         emb_list = []
