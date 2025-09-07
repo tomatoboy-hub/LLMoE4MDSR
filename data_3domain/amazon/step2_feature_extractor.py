@@ -24,10 +24,10 @@ class ItemFeatureExtractor:
             item_prompts[key] = item_str
         return item_prompts
 
-    def _build_prompts_from_parquet(self, meta_df:pd.DataFrame):
+    def _build_prompts_from_parquet(self, meta_df:pd.DataFrame,formatted_template:str):
         item_prompts = {}
         for index, row in tqdm(meta_df.iterrows(),total=len(meta_df),desc="Building prompts from parquet"):
-            item_str = copy.deepcopy(config.ITEM_PROMPT_TEMPLATE)
+            item_str = copy.deepcopy(formatted_template)
             # .get(key, default) の代わりに、辞書ライクなアクセスが可能
             item_str = item_str.replace("<TITLE>", str(row.get('title', 'unknown'))[:100])
             item_str = item_str.replace("<BRAND>", str(row.get('brand', 'unknown')))
@@ -45,7 +45,14 @@ class ItemFeatureExtractor:
         meta_df = pd.read_parquet(meta_parquet_path)
         filtered_meta_df = meta_df[meta_df['asin'].isin(required_asins)]
 
-        item_prompts = self._build_prompts_from_parquet(filtered_meta_df)
+        base_template = config.ITEM_PROMPT_TEMPLATE
+
+        simple_domain_type = domain_name_full.lower()
+
+        formatted_template = base_template.format(domain_type=simple_domain_type)
+
+        item_prompts = self._build_prompts_from_parquet(filtered_meta_df,formatted_template=formatted_template)
+
         emb_cache_path = os.path.join(config.HANDLE_DATA_DIR, f"item_emb_cache_{domain_key}.pkl")
         item_embeddings = {}
         if os.path.exists(emb_cache_path):

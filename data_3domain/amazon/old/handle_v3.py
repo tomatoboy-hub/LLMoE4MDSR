@@ -243,7 +243,7 @@ class AmazonHandler():
                 filtered_data[user_id] = item_seq_np[mask].tolist()
                 filtered_domain[user_id] = domain_seq_np[mask].tolist()
             
-        print(f"Export complete. {len(filtered_data)} users have sequences with the specified domains."))
+        print(f"Export complete. {len(filtered_data)} users have sequences with the specified domains.")
         with open(output_path, "wb") as f:
             pickle.dump((filtered_data, filtered_domain), f)
         print(f"Saved {output_path}")
@@ -253,7 +253,7 @@ class AmazonHandler():
         for domain_id in domain_ids:
             meta_data = Amazon_meta(self.domains[domain_id], self.item_dict[domain_id])
             json_str = json.dumps(meta_data)
-            with open(f"`{output_path}item2attributes_{domain}.json", 'w') as out:
+            with open(f"`{output_path}item2attributes_{domain_id}.json", 'w') as out:
                 out.write(json_str)
             return
 
