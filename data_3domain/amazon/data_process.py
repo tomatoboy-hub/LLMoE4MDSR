@@ -12,6 +12,8 @@ import gzip
 import tqdm
 import os
 from tqdm import tqdm
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 true=True
 false=False
@@ -20,7 +22,8 @@ def parse(path): # for Amazon
     inter_list = []
     for l in tqdm(g):
         if l and l.strip():
-            inter_list.append(json.loads(l.decode()) )
+            yield json.loads(l.decode())
+        #inter_list.append(json.loads(l.decode()) )
         # inter_list.append(eval(l))
 
     return inter_list
@@ -57,7 +60,7 @@ def Amazon(dataset_name, rating_score):
     '''
     datas = []
     # older Amazon
-    data_file = './data/' + str(dataset_name) + '/raw/' + str(dataset_name) + '.json.gz'
+    data_file = './raw/' + str(dataset_name) + '.json.gz'
     # latest Amazon
     # data_flie = '/home/hui_wang/data/new_Amazon/' + dataset_name + '.json.gz'
     for inter in parse(data_file):
@@ -70,25 +73,31 @@ def Amazon(dataset_name, rating_score):
     return datas
 
 
-def stream_amazon_reviews_to_parquet(dataset_name:str,rating_score:float,chunk_size:int=100000):
+def stream_amazon_reviews_to_parquet(dataset_name:str,rating_score:float,chunk_size:int=10000):
     print(f"Streaming {dataset_name} to parquet in chunks of {chunk_size}")
 
     writer = None
     chunk_data_list = []
-    data_file = './data/' + str(dataset_name) + '/raw/' + str(dataset_name) + '.json.gz'
+    data_file = './raw/' + str(dataset_name) + '.json.gz'
+    parquet_file = f'./raw/{dataset_name}.parquet'
+    if os.path.exists(parquet_file):
+        print(f"Parquet file {parquet_file} already exists. Skipping streaming.")
+        return
+    
     for inter in parse(data_file):
-        if float(inter['overall']) <= rating_score: # 小于一定分数去掉
+        if float(inter.get('overall',0.0)) <= rating_score: # 小于一定分数去掉
             continue
         chunk_data_list.append({
-            'user':inter['reviewerID'],
-            'item':inter['asin'],
-            'time':inter['unixReviewTime']
+            'user':inter.get('reviewerID'),
+            'item':inter.get('asin'),
+            'time':inter.get('unixReviewTime')
         })
         if len(chunk_data_list) >= chunk_size:
+            print(f"Writing chunk of {len(chunk_data_list)} rows to parquet")
             df_chunk = pd.DataFrame(chunk_data_list)
             table = pa.Table.from_pandas(df_chunk)
             if writer is None:
-                writer = pq.ParquetWriter(f'./data/{dataset_name}/raw/{dataset_name}.parquet',table.schema)
+                writer = pq.ParquetWriter(parquet_file,table.schema)
             writer.write_table(table)
             chunk_data_list = []
 
@@ -96,7 +105,7 @@ def stream_amazon_reviews_to_parquet(dataset_name:str,rating_score:float,chunk_s
         df_chunk = pd.DataFrame(chunk_data_list)
         table = pa.Table.from_pandas(df_chunk)
         if writer is None:
-            writer = pq.ParquetWriter(f'./data/{dataset_name}/raw/{dataset_name}.parquet',table.schema)
+            writer = pq.ParquetWriter(f'./raw/{dataset_name}.parquet',table.schema)
         writer.write_table(table)
     if writer:
         writer.close()
