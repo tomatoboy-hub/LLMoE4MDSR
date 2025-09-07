@@ -17,11 +17,6 @@ class AmazonHandler():
 
         self.df = pd.DataFrame()
         # クラス内で使用する変数をすべて初期化
-        self.data = []
-        self.new_data = []
-        self.user_count = {}
-        self.item_count = {}
-        self.domain_set = {int(key): {"user": set(), "item": set()} for key in self.domains_map.keys()}
         self.final_data = {}
         self.final_domain = {}
         self.user_dict = {}
