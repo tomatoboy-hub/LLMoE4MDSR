@@ -162,6 +162,26 @@ class UserProfiler:
         except Exception as e:
             print(f"Error generating embedding for user {user_id}. Error: {e}")
             return None
+    def _cluster_items(self):
+        print("Clustering items")
+        model = KMeans(n_clusters=self.n_clusters, random_state=42)
+        yhat = model.fit_predict(self.llm_emb)
+        self.cluster_map = {
+            item_id+1: cluster_id for item_id, cluster_id in enumerate(yhat, start=1)
+        }
+        print("Items clustered")
+    
+    def _partition_sequences(self):
+        print("Partitioning sequences")
+        for user, inter in tqdm(self.user_inter.items(), desc="Partition"):
+            partition_inter = [[] for _ in range(self.n_clusters)]
+            for item_id in inter:
+                cluster_id = self.cluster_map.get(item_id)
+                if cluster_id is not None:
+                    partition_inter[cluster_id].append(item_id)
+            self.partitioned_user_inter[user] = partition_inter
+        print("User interactions partitioned")
+        
         
     def run_pipeline(self):
         self._load_data()
