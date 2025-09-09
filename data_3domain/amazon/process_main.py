@@ -5,6 +5,7 @@ from llm_services import LocalSummarizer, LocalEmbedder
 from step1_data_processor import AmazonHandler
 from step2_feature_extractor import ItemFeatureExtractor
 from step3_user_profiler import UserProfiler
+from step4_pca_reducer import DimensionalityReducer
 from huggingface_hub import login
 
 # --- 認証処理 ---
@@ -54,6 +55,10 @@ def main():
         print("Step 3 finished")
     else:
         print(f"Step 3: User profile already processed and saved to {step3_output_path}")
+
+    reducer = DimensionalityReducer()
+    reducer.run_pipeline()
+    print("Step 4 finished")
 
     print("=" * 50)
     print("=== Full Pipeline Finished Successfully ===")
