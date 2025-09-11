@@ -76,7 +76,7 @@ class LLMoEMDSR(BaseSeqModel):
                 local_seqs, local_poses, local_negs, local_positions,
                 target_domain,domain_mask, **kwargs):
             
-        log_feats_global = self.log2feats(seq,positions,domain_id="global"):
+        log_feats_global = self.log2feats(seq,positions,domain_id="global")
         pos_embs_global = self._get_embedding(pos,domain_id="global")
         neg_embs_global = self._get_embedding(neg,domain_id="global")
 
@@ -111,9 +111,21 @@ class LLMoEMDSR(BaseSeqModel):
         loss = sum(domain_losses)
         return loss
 
-    def predict(self,seq,pos,neg,positions,
-                local_seqs, local_poses, local_negs, local_positions,
-                target_domain,domain_mask, **kwargs):
+    def predict(self,seq,item_indices,positions,
+                local_seqs, local_item_indices, local_positions,
+                target_domain, **kwargs):
+        log_feats_global = self.log2feats(seq,positions,domain_id = "global")
+        final_feat_global = log_feats_global[:,-1,:]
+        item_embs_global = self._get_embedding(item_indices, domain_id = "global")
+        logits_global = item_embs_global.matmul(final_feat_global.unsqueeze(-1)).squeeze(-1)
+        for i in range(self.num_domains):
+            seq_d, items_d, pos_d = local_seqs[i], local_item_indices[i],local_positions[i]
 
-        return domain_loss
-        return 
+            log_feats_d = self.log2feats(seq_d,pos_d,domain_id = i)
+            final_feat_d = log_feats_d[:,-1,:]
+            item_embs_d = self._get_embedding(items_d, domain_id = i)
+            logits_d = item_embs_d.matmul(final_feat_d.unsqueeze(-1)).squeeze(-1)
+
+            logits_global[target_domain == i] += logits_d[target_domain == i]
+        return logits_global
+        
