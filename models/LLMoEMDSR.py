@@ -7,7 +7,7 @@ from models.SASRec import SASRecBackbone
 from models.utils import Contrastive_Loss2, cal_bpr_loss
 from itertools import combinations
 
-class LLMoEMDSR(BaseSeqModel):
+class LLMoEMDSR_base(BaseSeqModel):
     def __init__(self, user_num, item_num_dict, device,args) -> None:
         self.num_domains = len(item_num_dict)
         self.item_nums = [item_num_dict[str(i)] for i in range(self.num_domains)]
@@ -45,32 +45,32 @@ class LLMoEMDSR(BaseSeqModel):
             self.local_backbones.append(SASRecBackbone(device,args))
         
         self.loss_func = nn.BCEWithLogitsLoss()
-        
-        def _get_embedding(self, item_ids, domain_id):
-            if domain_id == "global": 
-                if self.global_emb:
-                    item_seq_emb = self.item_emb_llm(item_ids)
-                    item_seq_emb = self.adapter(item_seq_emb)
-                else:
-                    item_seq_emb = self.item_emb_llm(item_ids)
-            else: 
-                item_seq_emb = self.local_item_embs[domain_id](item_ids)
-            return item_seq_emb
-
-        def log2feats(self,log_seqs,positions,domain_id):
-            if domain_id == "global":
-                seqs = self._get_embedding(log_seqs,domain_id="global")
-                seqs *= self.item_emb_llm.embedding_dim ** 0.5
-                seqs += self.pos_emb(positions.long())
-                seqs = self.emb_dropout(seqs)
-                log_feats = self.backbone(seqs,log_seqs)
+    
+    def _get_embedding(self, item_ids, domain_id):
+        if domain_id == "global": 
+            if self.global_emb:
+                item_seq_emb = self.item_emb_llm(item_ids)
+                item_seq_emb = self.adapter(item_seq_emb)
             else:
-                seqs = self._get_embedding(log_seqs, domain_id=domain_id)
-                seqs *= self.local_item_embs[domain_id].embedding_dim ** 0.5
-                seqs += self.local_pos_embs[domain_id](positions.long())
-                seqs = self.local_emb_dropouts[domain_id](seqs)
-                log_feats = self.local_backbones[domain_id](seqs,log_seqs)
-            return log_feats
+                item_seq_emb = self.item_emb_llm(item_ids)
+        else: 
+            item_seq_emb = self.local_item_embs[domain_id](item_ids)
+        return item_seq_emb
+
+    def log2feats(self,log_seqs,positions,domain_id):
+        if domain_id == "global":
+            seqs = self._get_embedding(log_seqs,domain_id="global")
+            seqs *= self.item_emb_llm.embedding_dim ** 0.5
+            seqs += self.pos_emb(positions.long())
+            seqs = self.emb_dropout(seqs)
+            log_feats = self.backbone(seqs,log_seqs)
+        else:
+            seqs = self._get_embedding(log_seqs, domain_id=domain_id)
+            seqs *= self.local_item_embs[domain_id].embedding_dim ** 0.5
+            seqs += self.local_pos_embs[domain_id](positions.long())
+            seqs = self.local_emb_dropouts[domain_id](seqs)
+            log_feats = self.local_backbones[domain_id](seqs,log_seqs)
+        return log_feats
         
     def forward(self,seq,pos,neg,positions,
                 local_seqs, local_poses, local_negs, local_positions,
@@ -129,3 +129,63 @@ class LLMoEMDSR(BaseSeqModel):
             logits_global[target_domain == i] += logits_d[target_domain == i]
         return logits_global
         
+
+class LLMoEMDSR(LLMoEMDSR_base):
+    def __init__(self, user_num, item_num_dict, device, args):
+        super().__init__(user_num, item_num_dict, device, args)
+
+        self.alpha = args.alpha
+        self.beta = args.beta
+
+        llm_user_emb = pickle.load(open(f"./handled/{args.user_emb_file}.pkl", "rb"))
+        self.user_emb_llm = nn.Embedding.from_pretrained(torch.Tensor(llm_user_emb), padding_idx = 0)
+        self.user_emb_llm.weight.requires_grad = False
+
+        self.user_adapter = nn.Sequential(
+            nn.Linear(llm_user_emb.shape[1], int(llm_user_emb.shape[1]/2)),
+            nn.Linear(int(llm_user_emb.shape[1]/2),args.hidden_size)
+        )
+        self.reg_loss_func = Contrastive_Loss2(tau = args.tau_reg)
+        self.user_loss_func = Contrastive_Loss2(tar = args.tau)
+
+        self.filter_init_modules.append(self.user_emb_llm)
+        self._init_weights()
+    
+    def forward(self,reg_list, user_id, **kwargs):
+        loss = super().forward(user_id = user_id, **kwargs)
+
+        total_reg_loss = 0.0
+        domain_pairs = combinations(range(self.num_domains),2)
+        num_pairs = 0
+
+        for i, j in domain_pairs:
+            reg_i_ids = reg_list[i]
+            reg_j_ids = reg_list[j]
+
+            reg_i_ids = reg_i_ids[reg_i_ids > 0]
+            reg_j_ids = reg_j_ids[reg_j_ids > 0]
+            
+            if len(reg_i_ids) == 0 or len(reg_j_ids) == 0:
+                continue
+
+            reg_i_emb = self._get_embedding(reg_i_ids, domain_id = "global")
+            reg_j_emb = self._get_embedding(reg_j_ids, domain_id = "global")
+
+            total_reg_loss += self.reg_loss_func(reg_i_emb,reg_j_emb)
+            num_pairs += 1
+        
+        if num_pairs > 0:
+            total_reg_loss /= num_pairs
+        
+        loss += self.alpha * total_reg_loss
+
+        seq = kwargs['seq']
+        positions = kwargs["positions"]
+
+        log_feats = self.log2feats(seq,positions,domain_id = "global")
+        final_feat = log_feats[:,-1,:]
+        llm_feats = self.user_emb_llm(user_id)
+        user_loss = self.user_loss_func(llm_feats,final_feat)
+        loss += self.beta * user_loss
+
+        return loss
