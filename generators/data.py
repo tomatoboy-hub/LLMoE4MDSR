@@ -294,7 +294,6 @@ class MDRSeq2SeqDataset(Dataset):
         for i in range(self.num_domains):
             inter_d = inter[domain_mask == i]
             dummy_domain_mask = np.zeros_like(inter_d, dtype = int)
-
             seq_d,pos_d, neg_d, pos_d_positions,_ = truncate_padding(inter_d,dummy_domain_mask, self.max_len, self.item_nums[i])
             local_seqs.append(seq_d)
             local_poses.append(pos_d)
@@ -322,15 +321,15 @@ class MDRRegSeq2SeqDatasetUser(MDRSeq2SeqDataset):
             if len(items_in_domain) == 0:
                 reg_list.append(np.array([0]))
             else:
-                random_item = np.random.choice(len(items_in_domain),1)
+                random_item = np.random.choice(items_in_domain,1)
                 reg_list.append(random_item + self.domain_offsets[i])
-        return (*base_data_tuple, reg_list,index)
+        return (*base_data_tuple,reg_list,index)
     
 class MDREvalSeq2SeqDataset(MDRSeq2SeqDataset):
     def __init__(self,args,data,domain_data,item_num_dict, max_len, neg_num = 1):
         super().__init__(args,data,domain_data, item_num_dict, max_len, neg_num)
         self.neg_num = neg_num
-    def __get_item__(self,index):
+    def __getitem__(self,index):
         inter = np.array(self.data[index])
         domain_mask = np.array(self.domain_data[index])
         target_domain = int(domain_mask[-1])
@@ -371,8 +370,7 @@ class MDREvalSeq2SeqDataset(MDRSeq2SeqDataset):
             local_positions.append(pos_d_positions)
 
         seq,_,_,positions,mask = truncate_padding(all_inter, domain_mask, self.max_len, self.total_item_num)
-        return (seq,pos,neg,positions,local_seqs,local_positions,local_negs,target_domain,mask)
-        
+        return (seq,pos,neg,positions,local_seqs,local_poses, local_negs, local_positions,target_domain,mask)
     
         
         
