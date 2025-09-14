@@ -370,8 +370,25 @@ class MDRGenerator(object):
 
         return tuple(collated_batch)
     
+    def get_user_item_num(self):
+        return self.user_num, self.item_num
+
     def get_item_num_dict(self):
         return self.item_num_dict
     
     def get_num_domains(self):
         return self.num_domains
+
+    def get_item_pop(self):
+        all_data = concat_data([self.train,self.valid,self.test])
+        pop = np.zeros(self.item_num+1)
+        domain_offsets = np.array([sum(list(self.item_num_dict.values())[:i]) for i in range(len(self.item_num_dict))])
+        all_domain_data = concat_data([self.domain_train, self.domain_valid, self.domain_test])
+
+        for i in range(len(all_data)):
+            seq = np.array(all_data[i])
+            d_seq = np.array(all_domain_data[i])
+            global_seq = seq + domain_offsets[d_seq]
+            pop[global_seq] += 1
+
+        return pop

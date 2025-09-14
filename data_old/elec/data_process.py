@@ -12,8 +12,6 @@ import gzip
 import tqdm
 import os
 from tqdm import tqdm
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 true=True
 false=False
@@ -21,9 +19,7 @@ def parse(path): # for Amazon
     g = gzip.open(path, 'rb')
     inter_list = []
     for l in tqdm(g):
-        if l and l.strip():
-            yield json.loads(l.decode())
-        #inter_list.append(json.loads(l.decode()) )
+        inter_list.append(json.loads(l.decode()))
         # inter_list.append(eval(l))
 
     return inter_list
@@ -33,8 +29,7 @@ def parse_meta(path): # for Amazon
     g = gzip.open(path, 'rb')
     inter_list = []
     for l in tqdm(g):
-        if l and l.strip():
-            yield json.loads(l.decode())
+        inter_list.append(eval(l))
 
     return inter_list
 
@@ -60,10 +55,10 @@ def Amazon(dataset_name, rating_score):
     '''
     datas = []
     # older Amazon
-    data_file = './raw/' + str(dataset_name) + '.json.gz'
+    data_flie = './data/' + str(dataset_name) + '/raw/' + str(dataset_name) + '.json.gz'
     # latest Amazon
     # data_flie = '/home/hui_wang/data/new_Amazon/' + dataset_name + '.json.gz'
-    for inter in parse(data_file):
+    for inter in parse(data_flie):
         if float(inter['overall']) <= rating_score: # 小于一定分数去掉
             continue
         user = inter['reviewerID']
@@ -71,86 +66,6 @@ def Amazon(dataset_name, rating_score):
         time = inter['unixReviewTime']
         datas.append((user, item, int(time)))
     return datas
-
-
-def stream_amazon_reviews_to_parquet(dataset_name:str,rating_score:float,chunk_size:int=10000):
-    print(f"Streaming {dataset_name} to parquet in chunks of {chunk_size}")
-
-    writer = None
-    chunk_data_list = []
-    data_file = './raw/' + str(dataset_name) + '.json.gz'
-    parquet_file = f'./raw/{dataset_name}.parquet'
-    if os.path.exists(parquet_file):
-        print(f"Parquet file {parquet_file} already exists. Skipping streaming.")
-        return
-    
-    for inter in parse(data_file):
-        if float(inter.get('overall',0.0)) <= rating_score: # 小于一定分数去掉
-            continue
-        chunk_data_list.append({
-            'user':inter.get('reviewerID'),
-            'item':inter.get('asin'),
-            'time':inter.get('unixReviewTime')
-        })
-        if len(chunk_data_list) >= chunk_size:
-            print(f"Writing chunk of {len(chunk_data_list)} rows to parquet")
-            df_chunk = pd.DataFrame(chunk_data_list)
-            table = pa.Table.from_pandas(df_chunk)
-            if writer is None:
-                writer = pq.ParquetWriter(parquet_file,table.schema)
-            writer.write_table(table)
-            chunk_data_list = []
-
-    if chunk_data_list:
-        df_chunk = pd.DataFrame(chunk_data_list)
-        table = pa.Table.from_pandas(df_chunk)
-        if writer is None:
-            writer = pq.ParquetWriter(f'./raw/{dataset_name}.parquet',table.schema)
-        writer.write_table(table)
-    if writer:
-        writer.close()
-    print(f"Streaming {dataset_name} to parquet in chunks of {chunk_size} completed")
-
-def stream_amazon_meta_to_parquet(dataset_name:str, chunk_size:int=10000):
-    row_file_path = f"./raw/meta_{dataset_name}.json.gz"
-    output_parquet_path = f"./raw/meta_{dataset_name}.parquet"
-    if os.path.exists(output_parquet_path):
-        print(f"Parquet file {output_parquet_path} already exists. Skipping streaming.")
-        return
-    
-    writer = None
-    chunk_data_list = []
-
-    for meta in parse_meta(row_file_path):
-        categories_str = json.dumps(meta.get('categories')) if meta.get('categories') else None
-        
-        chunk_data_list.append({
-            'asin': meta.get('asin'),
-            'title': meta.get('title'),
-            'brand': meta.get('brand'),
-            'price': meta.get('price'),
-            'categories': categories_str, # JSON文字列として保存
-            'description': str(meta.get('description', ''))[:500] # 長すぎる説明を切り捨て
-        })
-
-        if len(chunk_data_list) >= chunk_size:
-            df_chunk = pd.DataFrame(chunk_data_list)
-            table = pa.Table.from_pandas(df_chunk, preserve_index=False)
-            if writer is None:
-                writer = pq.ParquetWriter(output_parquet_path, table.schema)
-            writer.write_table(table)
-            chunk_data_list = []
-    if chunk_data_list:
-        df_chunk = pd.DataFrame(chunk_data_list)
-        table = pa.Table.from_pandas(df_chunk, preserve_index=False)
-        if writer is None:
-            writer = pq.ParquetWriter(output_parquet_path, table.schema)
-        writer.write_table(table)
-    if writer:
-        writer.close()
-    print(f"Streaming {dataset_name} to parquet in chunks of {chunk_size} completed")
-    
-
 
 
 def New_Amazon(dataset_name, rating_score):
@@ -213,7 +128,6 @@ def Amazon_meta(dataset_name, data_maps):
     datas = {}
     meta_flie = './raw/meta_' + str(dataset_name) + '.json.gz'
     item_asins = list(data_maps['str2id'].keys())
-
     for info in tqdm(parse_meta(meta_flie)):
         if info['asin'] not in item_asins:
             continue
