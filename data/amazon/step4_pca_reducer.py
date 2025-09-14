@@ -69,7 +69,7 @@ class DimensionalityReducer:
         pca_emb_all = pca.fit_transform(all_emb)
         
         # 結果を保存
-        output_filename = f"itm_emb_np_all_pca{self.pca_dimension}.pkl"
+        output_filename = f"itm_emb_np_all.pkl"
         output_path = os.path.join(self.handled_dir, output_filename)
         with open(output_path, "wb") as f:
             pickle.dump(pca_emb_all, f)

@@ -50,7 +50,7 @@ def main():
 
     step3_output_path = os.path.join(config.HANDLE_DATA_DIR, "usr_profile_emb_final.pkl")
     if not os.path.exists(step3_output_path):
-        user_profiler = UserProfiler(summarizer, embedder)
+        user_profiler = UserProfiler(embedder = embedder,summarizer = summarizer)
         user_profiler.run_pipeline()
         print("Step 3 finished")
     else:

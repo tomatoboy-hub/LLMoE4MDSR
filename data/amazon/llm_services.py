@@ -14,10 +14,11 @@ class LocalSummarizer:
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_compute_dtype=torch.bfloat16
             )
-        
 
         
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
         model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quantization_config,device_map="auto")
 
         self.pipeline = pipeline("text-generation", model=model, tokenizer=self.tokenizer)

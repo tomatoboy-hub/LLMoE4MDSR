@@ -50,15 +50,22 @@ class UserProfiler:
         print("Data Loading complete")
     
     def _prepare_user_interactions(self):
-        
-        for user, inter in tqdm(self.user_inter.items(), desc="Partitioning sequences"):
-            partition_inter = [[] for _ in range(self.n_clusters)]
-            for item_id in inter:
-                cluster_id = self.cluster_map.get(item_id)
-                if cluster_id is not None:
-                    partition_inter[cluster_id].append(item_id)
-            self.partitioned_user_inter[user] = partition_inter
-        print("User interactions partitioned")
+        print("--- 3.2: Preparing user interaction data ---")
+        offset, domain_offsets = 0,{}
+        for key in sorted(self.item_num_dict.keys()):
+            domain_offsets[key] = offset
+            offset += self.item_num_dict[key]
+
+        for user_str_id, seq in tqdm(self.inter_seq.items(), desc = "Preparing user interactions"):
+            user = int(user_str_id)
+            d_seq = self.domain_seq[user_str_id]
+
+            meta_seq = np.array(copy.deepcopy(seq[:-1]))
+            meta_domain = np.array(d_seq[:-1])
+
+            unique_seq = [item_id + domain_offsets[str(domain_id)] for item_id, domain_id in zip(meta_seq, meta_domain)]
+            self.user_inter[user] = unique_seq
+        print("User interaction preparation complete")        
     
     def _process_items_with_resume(self,source_dict, save_filepath, processing_function, **kwargs):
         """進捗の読み込み、未処理アイテムのループ、処理、安全な保存を一般化した関数。"""
@@ -146,7 +153,7 @@ class UserProfiler:
         all_pref = "\n\n".join(partition_pref)
         summary_prompt = prompt_template["summarizer"].format(all_pref)
         try:
-            summary = self.summarizer(summary_prompt)
+            summary = self.summarizer.summarize(summary_prompt)
             return summary
         except Exception as e:
             print(f"Error generating summary for user {user_id}. Error: {e}")

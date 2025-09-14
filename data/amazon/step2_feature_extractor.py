@@ -53,7 +53,7 @@ class ItemFeatureExtractor:
 
         if prompts_to_process:
             print(f"Processing {len(prompts_to_process)} items for domain {domain_key}")
-            new_embeddings = self.embedder.get_embeddings(prompts_to_process)
+            new_embeddings = self.embedder.get_embeddings(prompts_to_process,batch_size=128)
             for key, emb in zip(keys_to_process, new_embeddings):
                 item_embeddings[key] = emb.tolist()
             with open(emb_cache_path, "wb") as f: pickle.dump(item_embeddings, f)
