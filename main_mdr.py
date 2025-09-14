@@ -51,6 +51,7 @@ def main():
         trainer = MDRTrainer(args, logger, writer, device, generator)
     else:
         raise ValueError
+    
 
     if args.do_test:
         trainer.test()

@@ -19,7 +19,7 @@ class MDRTrainer(SeqTrainer):
 
         self.item_num_dict = self.generator.get_item_num_dict()
 
-        if self.args.model_name == "llmoemdsr":
+        if self.args.model_name == "llmoemdr":
             self.model = LLMoEMDSR(self.user_num, self.item_num_dict, self.device, self.args)
         else:
             raise ValueError

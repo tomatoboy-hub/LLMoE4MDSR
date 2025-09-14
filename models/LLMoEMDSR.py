@@ -10,13 +10,13 @@ from itertools import combinations
 class LLMoEMDSR_base(BaseSeqModel):
     def __init__(self, user_num, item_num_dict, device,args) -> None:
         self.num_domains = len(item_num_dict)
-        self.item_nums = [item_num_dict[str(i)] for i in range(self.num_domains)]
+        self.item_nums = [item_num_dict[i] for i in range(self.num_domains)]
         item_num = sum(self.item_nums)
 
         super().__init__(user_num, item_num, device, args)
         self.global_emb = args.global_emb
 
-        llm_emb_all = pickle.load(open(f"./handled/{args.llm_emb_file}_all.pkl", "rb"))
+        llm_emb_all = pickle.load(open(f".data/{args.dataset}/handled/{args.llm_emb_file}_all.pkl", "rb"))
         llm_item_emb = np.concatenate([np.zeros((1, llm_emb_all.shape[1])), llm_emb_all])
         
         self.item_emb_llm = nn.Embedding.from_pretrained(torch.Tensor(llm_item_emb), padding_idx = 0)
