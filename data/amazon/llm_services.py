@@ -15,8 +15,7 @@ class LocalSummarizer:
                 bnb_4bit_compute_dtype=torch.bfloat16
             )
 
-        
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False,padding_side="left")
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quantization_config,device_map="auto")
@@ -32,6 +31,36 @@ class LocalSummarizer:
         prompt = self.pipeline.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         outputs = self.pipeline(prompt, max_new_tokens = max_new_tokens, do_sample=True, temperature=0.6, top_p=0.9)
         return outputs[0]["generated_text"][len(prompt):].strip()
+    def summarize_batch(self, prompt_texts: list[str], max_new_tokens: int=150, batch_size: int = 8):
+        # 各テキストをチャットテンプレートに変換
+        prompts = []
+        for text in prompt_texts:
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant that summarizes user preferences based on item lists."},
+                {"role": "user", "content": text},
+            ]
+            prompt = self.pipeline.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            prompts.append(prompt)
+
+        # pipelineにリストとbatch_sizeを渡す
+        outputs = self.pipeline(
+            prompts, 
+            max_new_tokens=max_new_tokens, 
+            do_sample=True, 
+            temperature=0.6, 
+            top_p=0.9,
+            batch_size=batch_size  # バッチサイズを指定
+        )
+
+        # 結果から生成された部分だけを抽出してリストで返す
+        results = []
+        for i, output in enumerate(outputs):
+            generated_text = output[0]["generated_text"]
+            # プロンプト部分の長さを引いて、生成されたテキストのみを抽出
+            result = generated_text[len(prompts[i]):].strip()
+            results.append(result)
+            
+        return results
 
 class LocalEmbedder:
     def __init__(self,model_name:str):

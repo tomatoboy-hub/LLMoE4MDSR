@@ -30,7 +30,7 @@ class DimensionalityReducer:
         """ステップ2で生成された、ドメインごとの埋め込みファイルを読み込む。"""
         print("  Loading item embeddings for all domains...")
         for domain_key in self.domains.keys():
-            emb_path = os.path.join(self.handled_dir, f"itm_emb_np_{domain_key}.pkl")
+            emb_path = os.path.join(self.handled_dir, f"item_emb_{domain_key}.pkl")
             if os.path.exists(emb_path):
                 with open(emb_path, "rb") as f:
                     self.embeddings[domain_key] = pickle.load(f)

@@ -24,7 +24,7 @@ USER_PROFILE_PROMPTS = {
 
 
 SUMMARIZATION_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
-EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
+EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 
 
 USE_4BIT_QUANTIZATION = True 
