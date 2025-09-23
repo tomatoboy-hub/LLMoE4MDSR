@@ -126,8 +126,8 @@ class UserProfiler:
         """
         prompt_template = config.USER_PROFILE_PROMPTS
         
-        # --- ステップ1: バッチ処理のために、まず全プロンプトをリストに集める ---
-        prompts_for_preference = []
+        # --- ステップ1: バッチ処理のために、まず全プロンプトをリストに集める --
+        partition_pref = []
         for meta_inter in partition_inter:
             if not meta_inter:
                 continue
@@ -135,34 +135,32 @@ class UserProfiler:
             temp_meta_inter = meta_inter[-15:] if len(meta_inter) > 15 else meta_inter
             inter_str = "\n".join(self.title_list[item_id - 1] for item_id in temp_meta_inter)
             pref_prompt = prompt_template["analyzer"].format(inter_str)
-            prompts_for_preference.append(pref_prompt)
-
-        if not prompts_for_preference:
-            return "" # 分析対象の行動履歴がなければ空文字を返す
-
-        # --- ステップ2: 集めたプロンプトを一度にsummarize_batchに渡す ---
-        try:
-            # これで、複数のクラスタの嗜好分析が一度のGPU処理で完了する
-            partition_pref = self.summarizer.summarize_batch(prompts_for_preference, batch_size=config.NUM_CLUSTERS)
-        except Exception as e:
-            print(f"Error during batch preference generation for user {user_id}. Error: {e}")
-            return "" # バッチ処理に失敗した場合は空文字を返す
-
+            
+            try:
+                pref = self.summarizer.summarize(pref_prompt)
+                if pref:
+                    partition_pref.append(pref)
+            except Exception as e:
+                print(f"Error generating summary for user {user_id}. Error: {e}")
+                return None
+        
         if not partition_pref:
             return ""
-
-        # --- ステップ3: 結果を統合して最終的なプロファイルを生成 ---
-        all_pref = "\n\n".join(filter(None, partition_pref)) # 空の要約結果を除外
-        summary_prompt = prompt_template["summarizer"].format(all_pref)
         
+        all_pref = "\n\n".join(partition_pref)
+        summary_prompt = prompt_template["summarizer"].format(all_pref)
         try:
-            # 最後の統合ステップ。入力は1つなので、リストにラップして渡す
-            summaries = self.summarizer.summarize_batch([summary_prompt], batch_size=1)
-            return summaries[0] if summaries else ""
+            summary = self.summarizer.summarize(summary_prompt)
+            if summary:
+                return summary
+            else:
+                return ""
         except Exception as e:
             print(f"Error generating summary for user {user_id}. Error: {e}")
             return ""
-        
+
+
+
     def _generate_embedding(self, user_id, profile_text):
         if not profile_text:
             return None

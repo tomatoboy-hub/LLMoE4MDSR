@@ -25,6 +25,10 @@ class LLMoEMDSR_base(BaseSeqModel):
             nn.Linear(int(llm_item_emb.shape[1]/2), args.hidden_size)
         )
 
+        self.pos_emb = nn.Embedding(args.max_len + 1, args.hidden_size)
+        self.emb_dropout = nn.Dropout(p=args.dropout_rate)
+        self.backbone = SASRecBackbone(device, args)
+
         self.local_item_embs = nn.ModuleList()
         self.local_pos_embs = nn.ModuleList()
         self.local_emb_dropouts = nn.ModuleList()
@@ -32,7 +36,7 @@ class LLMoEMDSR_base(BaseSeqModel):
 
         for i in range(self.num_domains):
             domain_char = str(i)
-            llm_emb_local = pickle.load(open(f"./handled/{args.llm_emb_file}_{domain_char}.pkl", "rb"))
+            llm_emb_local = pickle.load(open(f".data/{args.dataset}/handled/{args.llm_emb_file}_{domain_char}.pkl", "rb"))
             llm_emb_local = np.concatenate([np.zeros((1,llm_emb_local.shape[1])),llm_emb_local])
 
             if args.local_emb:
@@ -137,7 +141,7 @@ class LLMoEMDSR(LLMoEMDSR_base):
         self.alpha = args.alpha
         self.beta = args.beta
 
-        llm_user_emb = pickle.load(open(f"./handled/{args.user_emb_file}.pkl", "rb"))
+        llm_user_emb = pickle.load(open(f".data/{args.dataset}/handled/{args.user_emb_file}.pkl", "rb"))
         self.user_emb_llm = nn.Embedding.from_pretrained(torch.Tensor(llm_user_emb), padding_idx = 0)
         self.user_emb_llm.weight.requires_grad = False
 
@@ -146,13 +150,13 @@ class LLMoEMDSR(LLMoEMDSR_base):
             nn.Linear(int(llm_user_emb.shape[1]/2),args.hidden_size)
         )
         self.reg_loss_func = Contrastive_Loss2(tau = args.tau_reg)
-        self.user_loss_func = Contrastive_Loss2(tar = args.tau)
-
-        self.filter_init_modules.append(self.user_emb_llm)
+        self.user_loss_func = Contrastive_Loss2(tau = args.tau)
+        if "user_emb_file" not in self.filter_init_modules:
+            self.filter_init_modules.append(self.user_emb_llm)
         self._init_weights()
     
     def forward(self,reg_list, user_id, **kwargs):
-        loss = super().forward(user_id = user_id, **kwargs)
+        loss = super().forward(**kwargs)
 
         total_reg_loss = 0.0
         domain_pairs = combinations(range(self.num_domains),2)
@@ -185,6 +189,7 @@ class LLMoEMDSR(LLMoEMDSR_base):
         log_feats = self.log2feats(seq,positions,domain_id = "global")
         final_feat = log_feats[:,-1,:]
         llm_feats = self.user_emb_llm(user_id)
+        llm_feats = self.user_adapter(llm_feats)
         user_loss = self.user_loss_func(llm_feats,final_feat)
         loss += self.beta * user_loss
 

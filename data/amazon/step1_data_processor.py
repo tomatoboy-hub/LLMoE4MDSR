@@ -71,10 +71,10 @@ class AmazonHandler():
         for domein_id_str, domain_name in self.domains_map.items():
             parquet_path = f'./raw/{domain_name}.parquet'
             if not os.path.exists(parquet_path):
-                print(f"Parquet file not found for domain {domain_name}")
+                print(f'Parquet file not found for domain {domain_name}')
                 stream_amazon_reviews_to_parquet(domain_name,rating_score=0)
             else:
-                print("Found parquet file for domain {domain_name}")
+                print(f"Found parquet file for domain {domain_name}")
             
             df_domain = pd.read_parquet(parquet_path)
             df_domain['domain_id'] = int(domein_id_str)
@@ -96,7 +96,7 @@ class AmazonHandler():
             user_counts = self.df.groupby('user')['user'].transform('size')
             item_counts = self.df.groupby('item')['item'].transform('size')
 
-            mask = (user_counts >= self.user_core) & (item_counts >= self.item_core)
+            mask = (user_counts > self.user_core) & (item_counts > self.item_core)
             self.df = self.df[mask]
 
             print(f"Filtering iteration ... Interactions remaining: { len(self.df) }")

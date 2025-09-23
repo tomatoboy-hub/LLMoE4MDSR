@@ -23,8 +23,8 @@ USER_PROFILE_PROMPTS = {
 }
 
 
-SUMMARIZATION_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
-EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
+SUMMARIZATION_MODEL = "google/gemma-3-270m"
+EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 
 
 USE_4BIT_QUANTIZATION = True 

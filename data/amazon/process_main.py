@@ -29,40 +29,40 @@ def main():
         print(f"Step 1: Data already processed and saved to {step1_output_path}")
     
 
-    print("Initializing LLM services")
-    summarizer = LocalSummarizer(config.SUMMARIZATION_MODEL,
-                                 config.USE_4BIT_QUANTIZATION)
-    embedder = LocalEmbedder(model_name = config.EMBEDDING_MODEL)
+    # print("Initializing LLM services")
+    # summarizer = LocalSummarizer(config.SUMMARIZATION_MODEL,
+    #                              config.USE_4BIT_QUANTIZATION)
+    # embedder = LocalEmbedder(model_name = config.EMBEDDING_MODEL)
     
-    print("LLM services initialized")
+    # print("LLM services initialized")
 
-    item_extractor = ItemFeatureExtractor(embedder)
+    # item_extractor = ItemFeatureExtractor(embedder)
 
-    for domain_key in config.DOMAINS.keys():
-        output_path = os.path.join(config.HANDLE_DATA_DIR, f"itm_emb_np_{domain_key}.pkl")
-        if not os.path.exists(output_path):
-            item_extractor.run_for_domain(domain_key)
-        else:
-            print(f"Item embedding already extracted and saved to {output_path}")
-    print("Step 2 finished")
+    # for domain_key in config.DOMAINS.keys():
+    #     output_path = os.path.join(config.HANDLE_DATA_DIR, f"itm_emb_np_{domain_key}.pkl")
+    #     if not os.path.exists(output_path):
+    #         item_extractor.run_for_domain(domain_key)
+    #     else:
+    #         print(f"Item embedding already extracted and saved to {output_path}")
+    # print("Step 2 finished")
     
-    print("Running step3 User Profiling ")
+    # print("Running step3 User Profiling ")
 
-    step3_output_path = os.path.join(config.HANDLE_DATA_DIR, "usr_profile_emb_final.pkl")
-    if not os.path.exists(step3_output_path):
-        user_profiler = UserProfiler(embedder = embedder,summarizer = summarizer)
-        user_profiler.run_pipeline()
-        print("Step 3 finished")
-    else:
-        print(f"Step 3: User profile already processed and saved to {step3_output_path}")
+    # step3_output_path = os.path.join(config.HANDLE_DATA_DIR, "usr_profile_emb_final.pkl")
+    # if not os.path.exists(step3_output_path):
+    #     user_profiler = UserProfiler(embedder = embedder,summarizer = summarizer)
+    #     user_profiler.run_pipeline()
+    #     print("Step 3 finished")
+    # else:
+    #     print(f"Step 3: User profile already processed and saved to {step3_output_path}")
 
-    reducer = DimensionalityReducer()
-    reducer.run_pipeline()
-    print("Step 4 finished")
+    # reducer = DimensionalityReducer()
+    # reducer.run_pipeline()
+    # print("Step 4 finished")
 
-    print("=" * 50)
-    print("=== Full Pipeline Finished Successfully ===")
-    print("=" * 50)
+    # print("=" * 50)
+    # print("=== Full Pipeline Finished Successfully ===")
+    # print("=" * 50)
 
 if __name__ == "__main__":
     login(HF_TOKEN)
