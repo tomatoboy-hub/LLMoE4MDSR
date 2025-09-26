@@ -6,9 +6,10 @@ import json
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+import torch
 from generators.data import SeqDataset
-from generators.data import CDSRSeq2SeqDataset, CDSREvalSeq2SeqDataset
-from generators.data import CDSRRegSeq2SeqDatasetUser
+from generators.data import CDSRSeq2SeqDataset, CDSREvalSeq2SeqDataset, MDRSeq2SeqDataset, MDREvalSeq2SeqDataset
+from generators.data import CDSRRegSeq2SeqDatasetUser, MDRRegSeq2SeqDatasetUser
 from utils.utils import unzip_data, concat_data, normalize, sparse_mx_to_torch_sparse_tensor
 
 
@@ -278,5 +279,116 @@ class CDSRRegSeq2SeqGeneratorUser(CDSRSeq2SeqGenerator):
         return train_dataloader
 
 
+class MDRGenerator(object):
+    def __init__(self,args,logger,device):
+        self.args = args
+        self.dataset = args.dataset
+        self.inter_file = args.inter_file
+        self.num_workers = args.num_workers
+        self.bs = args.train_batch_size
+        self.logger = logger
+        self.device = device
+        
 
+        self.logger.info("Loading dataset ... ")
+        start = time.time(  )
+        self._load_dataset()
+        end = time.time()
+        self.logger.info("Dataset is loaded: consume %.3f s" % (end - start))
 
+    def _load_dataset(self):
+        '''Load train, validation, test dataset'''
+
+        inter_seq,domain_seq = pickle.load(open(f'./data/{self.dataset}/handled/{self.inter_file}.pkl','rb'))
+        id_map = json.load(open(f'./data/{self.dataset}/handled/id_map.json','r'))
+
+        self.user_num = len(id_map['user_dict']['str2id'])
+        self.item_num_dict = {int(k): v for k,v in id_map["item_dict"]["item_count"].items()}
+        self.item_num = sum(self.item_num_dict.values())
+        self.num_domains = len(self.item_num_dict)
+
+        user_train,user_valid,user_test = {},{},{}
+        domain_train, domain_valid, domain_test = {},{},{}
+
+        for user,seq in inter_seq.items():
+            if len(seq) < 3:continue
+            user_train[user] = seq[:-2]
+            user_valid[user] = [seq[-2]]
+            user_test[user] = [seq[-1]]
+            
+            d_seq = domain_seq[user]
+            domain_train[user] = domain_seq[user][:-2]
+            domain_valid[user] = [domain_seq[user][-2]]
+            domain_test[user] = [domain_seq[user][-1]]
+        
+        self.train,self.valid,self.test = user_train,user_valid,user_test
+        self.domain_train,self.domain_valid,self.domain_test = domain_train,domain_valid,domain_test
+    
+    def make_trainloader(self):
+        train_dataset = unzip_data(self.train)
+        train_domain = unzip_data(self.domain_train)
+        self.train_dataset = MDRSeq2SeqDataset(self.args,train_dataset,train_domain,self.item_num_dict,self.args.max_len, self.args.train_neg)
+        train_dataloader = DataLoader(
+            self.train_dataset,
+            sampler = RandomSampler(self.train_dataset),
+            batch_size = self.bs,
+            num_workers = self.num_workers,
+            collate_fn = self.collate_fn
+        )
+        return train_dataloader
+    
+    def make_evalloader(self, test=False):
+        if test:
+            eval_dataset = concat_data([self.train,self.valid,self.test])
+            eval_domain = concat_data([self.domain_train,self.domain_valid,self.domain_test])
+        else:
+            eval_dataset = concat_data([self.train,self.valid])
+            eval_domain = concat_data([self.domain_train,self.domain_valid])
+        
+        self.eval_dataset = MDREvalSeq2SeqDataset(self.args,eval_dataset,eval_domain,self.item_num_dict,self.args.max_len,self.args.test_neg)
+        eval_dataloader = DataLoader(
+            self.eval_dataset,
+            sampler = SequentialSampler(self.eval_dataset),
+            batch_size = 100,
+            num_workers = self.num_workers,
+            collate_fn = self.collate_fn
+        )
+        return eval_dataloader
+
+    def collate_fn(self,batch):
+        unzipped_batch = list(zip(*batch))
+        collated_batch = []
+        var_name = self.train_dataset.var_name if hasattr(self.train_dataset,'train_dataset') else self.eval_dataset.var_name
+        for i, name in enumerate(var_name):
+            element = unzipped_batch[i]
+            if name.startswith(('local', 'reg_')):
+                transposed_list_of_lists = list(zip(*element))
+                collated_element = [torch.LongTensor(np.array(domain_batch)) for domain_batch in transposed_list_of_lists]
+                collated_batch.append(collated_element)
+            else:
+                collated_batch.append(torch.LongTensor(np.array(element)))
+
+        return tuple(collated_batch)
+    
+    def get_user_item_num(self):
+        return self.user_num, self.item_num
+
+    def get_item_num_dict(self):
+        return self.item_num_dict
+    
+    def get_num_domains(self):
+        return self.num_domains
+
+    def get_item_pop(self):
+        all_data = concat_data([self.train,self.valid,self.test])
+        pop = np.zeros(self.item_num+1)
+        domain_offsets = np.array([sum(list(self.item_num_dict.values())[:i]) for i in range(len(self.item_num_dict))])
+        all_domain_data = concat_data([self.domain_train, self.domain_valid, self.domain_test])
+
+        for i in range(len(all_data)):
+            seq = np.array(all_data[i])
+            d_seq = np.array(all_domain_data[i])
+            global_seq = seq + domain_offsets[d_seq]
+            pop[global_seq] += 1
+
+        return pop

@@ -3,12 +3,12 @@ def get_main_arguments(parser):
 
     parser.add_argument("--model_name", 
                         default='sasrec_seq',
-                        choices=['llm4cdsr'],
+                        choices=['llmoemdr'],
                         type=str, 
                         required=False,
                         help="model name")
     parser.add_argument("--dataset", 
-                        default="douban", 
+                        default="amazon", 
                         choices=["douban", "amazon", "elec", # preprocess by myself
                                 ], 
                         help="Choose the dataset")
@@ -17,7 +17,7 @@ def get_main_arguments(parser):
                         type=str,
                         help="the domain flag for SDSR")
     parser.add_argument("--inter_file",
-                        default="book_movie",
+                        default="cloth_sport_fashion",
                         type=str,
                         help="the name of interaction file")
     parser.add_argument("--pretrain_dir",
