@@ -197,6 +197,11 @@ class UserProfiler:
         self._prepare_user_interactions()
         self._cluster_items()
         self._partition_sequences()
+        print("\n--- 3.5: Saving partitioned user sequences for inspection ---")
+        partitioned_path = os.path.join(self.handled_dir, "partitioned_user_sequences.pkl")
+        with open(partitioned_path, "wb") as f:
+            pickle.dump(self.partitioned_user_inter, f)
+        print(f"  Saved partitioned data to {partitioned_path}")
 
         user_profile_path = os.path.join(self.handled_dir, "user_profile.pkl")
         self.user_profiles = self._process_items_with_resume(

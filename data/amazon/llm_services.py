@@ -18,6 +18,21 @@ class LocalSummarizer:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False,padding_side="left")
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        # 2. chat_templateがなければ、モデル名に応じて自動設定する
+        # if self.tokenizer.chat_template is None:
+        #     print("  WARNING: No chat template found in tokenizer. Applying a model-specific template.")
+        #     if "gemma" in self.model_name.lower():
+        #         print("  Applied Gemma chat template.")
+        #         # Gemmaの公式Jinjaテンプレート
+        #         self.tokenizer.chat_template = "{% for message in messages %}{{'<start_of_turn>' + message['role'] + '\n' + message['content'] + '<end_of_turn>\n'}}{% endfor %}{% if add_generation_prompt %}{{'<start_of_turn>model\n'}}{% endif %}"
+        #     # elif "mistral" in self.model_name.lower():
+        #     #     # 他のモデルも必要に応じてここに追加
+        #     #     self.tokenizer.chat_template = ...
+        #     else:
+        #         print("  Could not determine a chat template for this model. Text generation might fail.")
+        
+        
+
         model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quantization_config,device_map="auto")
 
         self.pipeline = pipeline("text-generation", model=model, tokenizer=self.tokenizer)
@@ -31,6 +46,8 @@ class LocalSummarizer:
         prompt = self.pipeline.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         outputs = self.pipeline(prompt, max_new_tokens = max_new_tokens, do_sample=True, temperature=0.6, top_p=0.9)
         return outputs[0]["generated_text"][len(prompt):].strip()
+
+        
     def summarize_batch(self, prompt_texts: list[str], max_new_tokens: int=150, batch_size: int = 8):
         # 各テキストをチャットテンプレートに変換
         prompts = []

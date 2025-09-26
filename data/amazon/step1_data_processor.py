@@ -40,6 +40,8 @@ class AmazonHandler():
         print("--- 1.3 : Counting Interactions ---")
         #self.id_map()
         self._id_map()
+        print("--- 1.4 : Counting Interactions ---")
+        print(len(self.df))
 
         print("--- Step 5 : Saving Data ---")
 

@@ -4,9 +4,9 @@ HANDLE_DATA_DIR = "./handled"
 DOMAINS = {
     "0":"Clothing_Shoes_and_Jewelry",
     "1":"Sports_and_Outdoors",
-    "2":"AMAZON_FASHION"
 }
 
+#"2":"AMAZON_FASHION"
 USER_CORE = 5
 ITEM_CORE = 3
 INTER_FILE_NAME  = "cloth_sport_fashion.pkl"
@@ -23,7 +23,7 @@ USER_PROFILE_PROMPTS = {
 }
 
 
-SUMMARIZATION_MODEL = "google/gemma-3-270m"
+SUMMARIZATION_MODEL = "meta-llama/Llama-3.2-1B-Instruct"
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 
 
