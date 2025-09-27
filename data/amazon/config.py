@@ -30,3 +30,5 @@ EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 USE_4BIT_QUANTIZATION = True 
 
 PCA_TARGET_DIMENSION = 128
+PROFILE_BATCH_SIZE = 64  # DataLoaderが一度に読み込むユーザー数 (CPU/メモリに応じて調整)
+LLM_BATCH_SIZE = 16      # LLMに一度に渡すプロンプト数 (GPUメモリに応じて調整)
