@@ -3,11 +3,43 @@ import pickle
 import numpy as np
 import json
 from tqdm import tqdm
+from torch.utils.data import Dataset, DataLoader
 import copy
 import shutil
 from sklearn.cluster import KMeans
 import config
 from llm_services import LocalSummarizer, LocalEmbedder
+
+class UserProfileDataset(Dataset):
+    def __init__(self,partitioned_user_inter):
+        self.user_ids = list(partitioned_user_inter.keys())
+        self.partitioned_user_inter = partitioned_user_inter
+    
+    def __len__(self):
+        return len(self.user_ids)
+    
+    def __getitem__(self,idx):
+        user_id = self.user_ids[idx]
+        partition_inter = self.partitioned_user_inter[user_id]
+        return user_id, partition_inter
+
+def user_profile_collate_fn(batch,title_list,prompt_template):
+    batch_user_ids = []
+    analyzer_prompts_all = []
+    user_prompt_map = []
+
+    for user_id, p_inter in batch:
+        batch_user_ids.append(user_id)
+        prompts_for_user = []
+        for meta_inter in p_inter:
+            if not meta_inter: continue
+            temp_meta_inter = meta_inter[-15:]
+            item_str = "\n".join([title_list[item_id - 1] for item_id in temp_meta_inter if item_id -1 < len(title_list)])
+            prompts_for_user.append(prompt_template["analyzer"].format(item_str))
+        analyzer_prompts_all.extend(prompts_for_user)
+        user_prompt_map.append(len(prompts_for_user))
+
+    return batch_user_ids, analyzer_prompts_all, user_prompt_map
 
 class UserProfiler:
     def __init__(self, embedder: LocalEmbedder, summarizer: LocalSummarizer):
@@ -191,6 +223,86 @@ class UserProfiler:
             self.partitioned_user_inter[user] = partition_inter
         print("User interactions partitioned")
 
+    def _generate_profiles_with_dataloader(self):
+        print("\n--- 3.5: Generating user profiles with DataLoader ---")
+        user_profile_path = os.path.join(self.handled_dir, "user_profile.pkl")
+        self.user_profiles = pickle.load(open(user_profile_path,"rb")) if os.path.exists(user_profile_path) else {}
+
+        keys_to_process = {uid:p_inter for uid, p_inter in self.partitioned_user_inter.items() if uid not in self.user_profiles}
+
+        if not keys_to_process:
+            print("All user profile have been processed")
+            return 
+
+        print(f"Total users: {len(self.partitioned_user_inter)}, Already processed: {len(self.user_profiles)}, To process: {len(keys_to_process)}")
+        
+        dataset = UserProfileDataset(keys_to_process)
+        collate_fn_with_args = lambda batch: user_profile_collate_fn(batch, self.title_list, config.USER_PROFILE_PROMPTS)
+
+        data_loader = DataLoader(dataset, batch_size=config.PROFILE_BATCH_SIZE, shuffle=False, num_workers = 4, collate_fn = collate_fn_with_args)
+
+        for batch_user_ids, analyser_prompts_all, user_prompt_map in tqdm(data_loader, desc="Processing User Profile Batches"):
+
+            generated_prefs = self.summarizer.summarize_batch(analyser_prompts_all, batch_size=config.LLM_BATCH_SIZE)
+            # ステージ2: 結果を統合し、最終要約プロンプトを作成 (ここはCPU処理)
+            summarizer_prompts_final = []
+            pref_idx = 0
+            for pref_count in user_prompt_map:
+                if pref_count > 0:
+                    user_prefs = generated_prefs[pref_idx : pref_idx + pref_count]
+                    all_pref_str = "\n\n".join(filter(None, user_prefs))
+                    summarizer_prompts_final.append(config.USER_PROFILE_PROMPTS["summarizer"].format(all_pref_str))
+                    pref_idx += pref_count
+                else:
+                    summarizer_prompts_final.append("")
+            # ステージ3: 全ての最終要約プロンプトを一度にGPUに送る
+            final_summaries = self.summarizer.summarize_batch(summarizer_prompts_final, batch_size=config.LLM_BATCH_SIZE)
+            # 結果を保存
+            for user_id, summary in zip(batch_user_ids, final_summaries):
+                if summary: self.user_profiles[user_id] = summary
+            #最終保存
+        with open(user_profile_path, "wb") as f: pickle.dump(self.user_profiles, f)
+        print("User profile generation complete.")
+    
+    def _generate_embeddings_in_batches(self):
+        """生成されたプロファイルの埋め込みを効率的に作成する。"""
+        print("\n--- 3.6: Generating embeddings for user profiles ---")
+        user_emb_path = os.path.join(self.handled_dir, "user_profile_emb.pkl")
+        self.user_embeddings = pickle.load(open(user_emb_path, "rb")) if os.path.exists(user_emb_path) else {}
+        
+        keys_for_embedding = [uid for uid in self.user_profiles if uid not in self.user_embeddings]
+
+        if not keys_for_embedding:
+            print("  All embeddings have been generated.")
+            return
+
+        print(f"  Users to process for embeddings: {len(keys_for_embedding)}")
+        
+        profile_texts = [self.user_profiles[uid] for uid in keys_for_embedding]
+        new_embeddings = self.embedder.get_embeddings(profile_texts, batch_size=config.PROFILE_BATCH_SIZE * 2)
+        
+        for user_id, emb in zip(keys_for_embedding, new_embeddings):
+            self.user_embeddings[user_id] = emb
+
+        with open(user_emb_path, "wb") as f: pickle.dump(self.user_embeddings, f)
+        print("  User profile embedding complete.")
+    
+    def _save_final_embeddings(self):
+        """最終的なNumpy配列を保存する。"""
+        print("\n--- 3.7: Saving final user embedding array ---")
+        # ユーザーIDの順序を保つためにソート
+        all_user_ids = sorted(self.partitioned_user_inter.keys())
+        
+        final_emb_list = [self.user_embeddings[uid] for uid in all_user_ids if uid in self.user_embeddings]
+        
+        if not final_emb_list:
+            print("  No embeddings to save.")
+            return
+            
+        final_emb_array = np.array(final_emb_list)
+        final_emb_path = os.path.join(self.handled_dir, "usr_profile_emb_final.pkl")
+        with open(final_emb_path, "wb") as f: pickle.dump(final_emb_array, f)
+        print(f"  Saved final {len(final_emb_array)} user profile embeddings to {final_emb_path}")
         
     def run_pipeline(self):
         self._load_data()
@@ -202,28 +314,7 @@ class UserProfiler:
         with open(partitioned_path, "wb") as f:
             pickle.dump(self.partitioned_user_inter, f)
         print(f"  Saved partitioned data to {partitioned_path}")
-
-        user_profile_path = os.path.join(self.handled_dir, "user_profile.pkl")
-        self.user_profiles = self._process_items_with_resume(
-            source_dict = self.partitioned_user_inter,
-            save_filepath = user_profile_path,
-            processing_function = self._generate_user_profile)
-        
-        user_emb_path = os.path.join(self.handled_dir, "user_profile_emb.pkl")
-        self.user_embeddings = self._process_items_with_resume(
-            source_dict = self.user_profiles,
-            save_filepath = user_emb_path,
-            processing_function = self._generate_embedding)
-
-        emb_list = []
-        for user_id in sorted(self.user_embeddings.keys()):
-            embedding = self.user_embeddings[user_id]
-            if embedding is not None and len(embedding) > 0:
-                emb_list.append(embedding)
-            
-        final_emb_array = np.array(emb_list)
-        final_emb_path = os.path.join(self.handled_dir, "user_profile_emb_final.pkl")
-        with open(final_emb_path, "wb") as f:
-            pickle.dump(final_emb_array, f)
-        print(f"Saved final user profile embeddings to {final_emb_path}")
-        print("Pipeline completed successfully")
+        # 👈【修正点】古い処理を削除し、新しいDataLoaderベースの処理を呼び出す
+        self._generate_profiles_with_dataloader()
+        self._generate_embeddings_in_batches()
+        self._save_final_embeddings()

@@ -48,6 +48,7 @@ def main():
     
     print("Running step3 User Profiling ")
 
+
     step3_output_path = os.path.join(config.HANDLE_DATA_DIR, "usr_profile_emb_final.pkl")
     if not os.path.exists(step3_output_path):
         user_profiler = UserProfiler(embedder = embedder,summarizer = summarizer)
@@ -55,7 +56,7 @@ def main():
         print("Step 3 finished")
     else:
         print(f"Step 3: User profile already processed and saved to {step3_output_path}")
-
+        
     reducer = DimensionalityReducer()
     reducer.run_pipeline()
     print("Step 4 finished")
