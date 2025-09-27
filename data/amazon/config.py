@@ -1,9 +1,10 @@
 RAW_DATA_DIR = "./raw"
-HANDLE_DATA_DIR = "./handled"
+HANDLE_DATA_DIR = "./handled_3domain"
 
 DOMAINS = {
     "0":"Clothing_Shoes_and_Jewelry",
     "1":"Sports_and_Outdoors",
+    "2":"AMAZON_FASHION"
 }
 
 #"2":"AMAZON_FASHION"

@@ -33,10 +33,10 @@ class AmazonHandler():
         #self.filter_time(t_min=config.TIME_MIN, t_max = config.TIME_MAX)
 
         self._filter_time(t_min=config.TIME_MIN, t_max = config.TIME_MAX)
-
+        print(len(self.df))
         #self.filter_Kcore(user_core=self.user_core, item_core=self.item_core)
         self._filter_Kcore()
-
+        print(len(self.df))
         print("--- 1.3 : Counting Interactions ---")
         #self.id_map()
         self._id_map()
@@ -83,6 +83,8 @@ class AmazonHandler():
             all_dfs.append(df_domain)
         
         self.df = pd.concat(all_dfs, ignore_index=True)
+        print(len(self.df))
+
         self.df["time"] = pd.to_numeric(self.df["time"]).astype(np.int64)
         self.df["domain_id"] = self.df["domain_id"].astype(np.int8)
         print(f"Data loaded. Total:{len(self.df)} interactions")

@@ -42,10 +42,28 @@ class DimensionalityReducer:
         """ドメインごとに個別にPCAを適用し、結果を保存する。"""
         print(f"  Reducing dimensions for each domain separately to {self.pca_dimension}...")
         for domain_key, emb_array in tqdm(self.embeddings.items(), desc="  Processing separate PCA"):
-            # PCAモデルを初期化し、学習と変換を同時に行う
-            pca = PCA(n_components=self.pca_dimension)
-            pca_emb = pca.fit_transform(emb_array)
+            if not emb_array.any(): continue
+            n_samples = emb_array.shape[0]
             
+            # 👈【ここからが重要修正箇所】
+            if n_samples < self.pca_dimension:
+                print(f"\n    [Warning] Domain {domain_key} has only {n_samples} items, which is less than the target PCA dimension {self.pca_dimension}.")
+                
+                # 1. まず、可能な最大次元数 (n_samples) でPCAを実行
+                pca = PCA(n_components=n_samples)
+                pca_emb_small = pca.fit_transform(emb_array) # 出力形状: (n_samples, n_samples)
+                
+                # 2. 目標次元数のゼロ行列を作成
+                pca_emb = np.zeros((n_samples, self.pca_dimension))
+                
+                # 3. ゼロ行列に、PCAの結果を左詰めでコピー（ゼロパディング）
+                pca_emb[:, :n_samples] = pca_emb_small
+                print(f"    Padded embeddings from shape {pca_emb_small.shape} to {pca_emb.shape}.")
+                
+            else:
+                # サンプル数が十分な場合は、通常通りPCAを実行
+                pca = PCA(n_components=self.pca_dimension)
+                pca_emb = pca.fit_transform(emb_array)
             # 結果を保存
             output_filename = f"itm_emb_np_{domain_key}_pca{self.pca_dimension}.pkl"
             output_path = os.path.join(self.handled_dir, output_filename)
