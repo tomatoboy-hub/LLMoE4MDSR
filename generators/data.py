@@ -271,7 +271,7 @@ class MDRSeq2SeqDataset(Dataset):
         self.neg_num = neg_num
 
         self.num_domains = len(item_num_dict)
-        self.item_nums = [item_num_dict[str(i)] for i in range(self.num_domains)]
+        self.item_nums = [item_num_dict[i] for i in range(self.num_domains)]
         self.domain_offsets = np.array([sum(self.item_nums[:i]) for i in range(self.num_domains)])
         self.total_item_num = sum(self.item_nums)
 
@@ -288,16 +288,21 @@ class MDRSeq2SeqDataset(Dataset):
         all_inter = inter + self.domain_offsets[domain_mask]
         target_domain = domain_mask[-1]
 
-        seq, pos, neg, positions, mask = truncate_padding(all_inter, domain_mask, self.max_len, self.total_item_num)
+        seq, pos, neg, positions, mask = truncate_padding(
+            all_inter, domain_mask, self.max_len, self.item_nums, self.domain_offsets
+        )
+        
         local_seqs, local_poses, local_negs, local_positions = [], [], [], []
 
         for i in range(self.num_domains):
             inter_d = inter[domain_mask == i]
             dummy_domain_mask = np.zeros_like(inter_d, dtype = int)
-            seq_d,pos_d, neg_d, pos_d_positions,_ = truncate_padding(inter_d,dummy_domain_mask, self.max_len, self.item_nums[i])
+            seq_d, pos_d, neg_d_local, pos_d_positions, _ = truncate_padding(
+                inter_d, dummy_domain_mask, self.max_len, [self.item_nums[i]], [0]
+            )
             local_seqs.append(seq_d)
             local_poses.append(pos_d)
-            local_negs.append(neg_d)
+            local_negs.append(neg_d_local)
             local_positions.append(pos_d_positions)
         
         return (seq,pos,neg,positions,local_seqs,local_poses,local_negs,local_positions,target_domain,mask)

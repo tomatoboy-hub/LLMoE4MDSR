@@ -11,12 +11,13 @@ class LLMoEMDSR_base(BaseSeqModel):
     def __init__(self, user_num, item_num_dict, device,args) -> None:
         self.num_domains = len(item_num_dict)
         self.item_nums = [item_num_dict[i] for i in range(self.num_domains)]
+        self.device = device
         item_num = sum(self.item_nums)
 
         super().__init__(user_num, item_num, device, args)
         self.global_emb = args.global_emb
 
-        llm_emb_all = pickle.load(open(f".data/{args.dataset}/handled/{args.llm_emb_file}_all.pkl", "rb"))
+        llm_emb_all = pickle.load(open(f"./data/{args.dataset}/handled/{args.llm_emb_file}_all.pkl", "rb"))
         llm_item_emb = np.concatenate([np.zeros((1, llm_emb_all.shape[1])), llm_emb_all])
         
         self.item_emb_llm = nn.Embedding.from_pretrained(torch.Tensor(llm_item_emb), padding_idx = 0)
@@ -36,7 +37,7 @@ class LLMoEMDSR_base(BaseSeqModel):
 
         for i in range(self.num_domains):
             domain_char = str(i)
-            llm_emb_local = pickle.load(open(f".data/{args.dataset}/handled/{args.llm_emb_file}_{domain_char}.pkl", "rb"))
+            llm_emb_local = pickle.load(open(f"./data/{args.dataset}/handled/{args.llm_emb_file}_{domain_char}_pca128.pkl", "rb"))
             llm_emb_local = np.concatenate([np.zeros((1,llm_emb_local.shape[1])),llm_emb_local])
 
             if args.local_emb:
@@ -141,7 +142,7 @@ class LLMoEMDSR(LLMoEMDSR_base):
         self.alpha = args.alpha
         self.beta = args.beta
 
-        llm_user_emb = pickle.load(open(f".data/{args.dataset}/handled/{args.user_emb_file}.pkl", "rb"))
+        llm_user_emb = pickle.load(open(f"./data/{args.dataset}/handled/{args.user_emb_file}.pkl", "rb"))
         self.user_emb_llm = nn.Embedding.from_pretrained(torch.Tensor(llm_user_emb), padding_idx = 0)
         self.user_emb_llm.weight.requires_grad = False
 
@@ -155,8 +156,22 @@ class LLMoEMDSR(LLMoEMDSR_base):
             self.filter_init_modules.append(self.user_emb_llm)
         self._init_weights()
     
-    def forward(self,reg_list, user_id, **kwargs):
-        loss = super().forward(**kwargs)
+    def forward(self, 
+                # 親クラスが必要とする引数を全て明記
+                seq, pos, neg, positions,
+                local_seqs, local_poses, local_negs, local_positions,
+                target_domain, domain_mask,
+                # このクラスが追加で必要とする引数
+                reg_list, 
+                user_id,
+                # さらに将来の拡張のためのkwargs (今回は未使用)
+                **kwargs):
+        loss = super().forward(
+            seq=seq, pos=pos, neg=neg, positions=positions,
+            local_seqs=local_seqs, local_poses=local_poses, 
+            local_negs=local_negs, local_positions=local_positions,
+            target_domain=target_domain, domain_mask=domain_mask
+        )
 
         total_reg_loss = 0.0
         domain_pairs = combinations(range(self.num_domains),2)

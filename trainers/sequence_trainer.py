@@ -14,6 +14,35 @@ class SeqTrainer(Trainer):
     def __init__(self, args, logger, writer, device, generator):
 
         super().__init__(args, logger, writer, device, generator)
+        print("  Initializing data loaders...")
+        self.train_loader = self.generator.make_trainloader()
+        self.valid_loader = self.generator.make_evalloader(test=False)
+        self.test_loader = self.generator.make_evalloader(test=True)
+        print("  Data loaders initialized.")
+    
+    def _prepare_train_inputs(self, batch):
+        """
+        学習用のバッチタプルを、モデルが受け取るキーワード引数付きの辞書に変換する。
+        """
+        # 👈【最重要改善点】
+        # self.generatorに頼るのではなく、self.train_loaderから直接datasetとvar_nameを取得
+        var_names = self.train_loader.dataset.var_name
+        print(var_names)
+        inputs = {name: data for name, data in zip(var_names, batch)}
+        print(inputs.keys())
+        return inputs
+    
+    def _prepare_eval_inputs(self, batch, loader):
+        """
+        評価用のバッチタプルを辞書に変換する。
+        どのloaderを使っているかを引数で受け取ることで、より汎用的に。
+        """
+        # 👈【最重要改善点】
+        # 引数で渡されたloaderから直接datasetとvar_nameを取得
+        var_names = loader.dataset.var_name
+        inputs = {name: data for name, data in zip(var_names, batch)}
+        return inputs
+        
     
 
     def _train_one_epoch(self, epoch):
@@ -27,10 +56,23 @@ class SeqTrainer(Trainer):
 
         for batch in prog_iter:
 
-            batch = tuple(t.to(self.device) for t in batch)
+            # 👈 修正後：tがリストかどうかを判定する
+            processed_batch = []
+            for t in batch:
+                if isinstance(t, list):
+                    # tがテンソルのリストの場合、リスト内の各テンソルをGPUに送る
+                    processed_batch.append([tensor.to(self.device) for tensor in t])
+                else:
+                    # tが単一のテンソルの場合、そのままGPUに送る
+                    processed_batch.append(t.to(self.device))
+            batch = tuple(processed_batch)
+            print(len(batch))
+            
+            #batch = tuple(t.to(self.device) for t in batch)
 
             train_start = time.time()
             inputs = self._prepare_train_inputs(batch)
+            print(inputs.keys())
             loss = self.model(**inputs)
             loss.backward()
 
@@ -75,9 +117,20 @@ class SeqTrainer(Trainer):
         target_items = torch.empty(0).to(self.device)
 
         for batch in tqdm(test_loader, desc=desc):
+            # 👈 修正後：tがリストかどうかを判定する
+            processed_batch = []
+            for t in batch:
+                if isinstance(t, list):
+                    # tがテンソルのリストの場合、リスト内の各テンソルをGPUに送る
+                    processed_batch.append([tensor.to(self.device) for tensor in t])
+                else:
+                    # tが単一のテンソルの場合、そのままGPUに送る
+                    processed_batch.append(t.to(self.device))
+            batch = tuple(processed_batch)
 
-            batch = tuple(t.to(self.device) for t in batch)
-            inputs = self._prepare_eval_inputs(batch)
+            # batch = tuple(t.to(self.device) for t in batch)
+
+            inputs = self._prepare_eval_inputs(batch,test_loader)
             seq_len = torch.cat([seq_len, torch.sum(inputs["seq"]>0, dim=1)])
             target_items = torch.cat([target_items, inputs["pos"]])
             

@@ -8,7 +8,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 import torch
 from generators.data import SeqDataset
-from generators.data import CDSRSeq2SeqDataset, CDSREvalSeq2SeqDataset, MDRSeq2SeqDataset, MDREvalSeq2SeqDataset
+from generators.data import CDSRSeq2SeqDataset, CDSREvalSeq2SeqDataset, MDRSeq2SeqDataset,MDRRegSeq2SeqDatasetUser, MDREvalSeq2SeqDataset
 from generators.data import CDSRRegSeq2SeqDatasetUser, MDRRegSeq2SeqDatasetUser
 from utils.utils import unzip_data, concat_data, normalize, sparse_mx_to_torch_sparse_tensor
 
@@ -279,7 +279,7 @@ class CDSRRegSeq2SeqGeneratorUser(CDSRSeq2SeqGenerator):
         return train_dataloader
 
 
-class MDRGenerator(object):
+class MDRGenerator(Generator):
     def __init__(self,args,logger,device):
         self.args = args
         self.dataset = args.dataset
@@ -327,7 +327,7 @@ class MDRGenerator(object):
     def make_trainloader(self):
         train_dataset = unzip_data(self.train)
         train_domain = unzip_data(self.domain_train)
-        self.train_dataset = MDRSeq2SeqDataset(self.args,train_dataset,train_domain,self.item_num_dict,self.args.max_len, self.args.train_neg)
+        self.train_dataset = MDRRegSeq2SeqDatasetUser(self.args,train_dataset,train_domain,self.item_num_dict,self.args.max_len, self.args.train_neg)
         train_dataloader = DataLoader(
             self.train_dataset,
             sampler = RandomSampler(self.train_dataset),
@@ -356,18 +356,36 @@ class MDRGenerator(object):
         return eval_dataloader
 
     def collate_fn(self,batch):
+        # バッチが空の場合は空のタプルを返す
+        if not batch:
+            return tuple()
+
+        # 1. バッチの最初のサンプルを取り出し、その要素数をチェックする
+        first_sample = batch[0]
+        num_elements = len(first_sample)
+
+        # 2. 要素数に応じて、学習用か評価用のどちらのvar_nameを使うか決定する
+        #    train_datasetは必ず存在するので、まずそれを基準にする
+        if num_elements == len(self.train_dataset.var_name):
+            var_names = self.train_dataset.var_name
+        elif hasattr(self, 'eval_dataset') and num_elements == len(self.eval_dataset.var_name):
+            var_names = self.eval_dataset.var_name
+        else:
+            # 予期せぬエラーを防ぐ
+            raise ValueError(f"Batch sample length ({num_elements}) does not match train or eval var_name length.")
+
+        # 3. 決定したvar_namesを使ってバッチを整形する（以降のロジックは同じ）
         unzipped_batch = list(zip(*batch))
         collated_batch = []
-        var_name = self.train_dataset.var_name if hasattr(self.train_dataset,'train_dataset') else self.eval_dataset.var_name
-        for i, name in enumerate(var_name):
-            element = unzipped_batch[i]
-            if name.startswith(('local', 'reg_')):
-                transposed_list_of_lists = list(zip(*element))
-                collated_element = [torch.LongTensor(np.array(domain_batch)) for domain_batch in transposed_list_of_lists]
+        
+        for name, element in zip(var_names, unzipped_batch):
+            if name.startswith(('local_', 'reg_')):
+                transposed = list(zip(*element))
+                collated_element = [torch.LongTensor(np.array(domain_batch)) for domain_batch in transposed]
                 collated_batch.append(collated_element)
             else:
                 collated_batch.append(torch.LongTensor(np.array(element)))
-
+        
         return tuple(collated_batch)
     
     def get_user_item_num(self):
