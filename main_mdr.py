@@ -30,6 +30,7 @@ args.llm_emb_path = os.path.join("data/"+args.dataset+"/handled/", "{}.pkl".form
 
 
 def main():
+    print("Process Start")
 
     log_manager = Logger(args)  # initialize the log manager
     logger, writer = log_manager.get_logger()    # get the logger

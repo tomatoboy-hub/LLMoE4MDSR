@@ -368,13 +368,13 @@ class MDREvalSeq2SeqDataset(MDRSeq2SeqDataset):
                 while n in non_neg_d:
                     n = np.random.randint(1,self.item_nums[i] + 1)
                 neg_d.append(n)
-            seq_d,_,_,pos_d_positions,_ = truncate_padding(inter_d,dummy_domain_mask, self.max_len, self.item_nums[i])
+            seq_d,_,_,pos_d_positions,_ = truncate_padding(inter_d,dummy_domain_mask, self.max_len, self.item_nums, self.domain_offsets)
             local_seqs.append(seq_d)
             local_poses.append(pos_d)
             local_negs.append(neg_d)
             local_positions.append(pos_d_positions)
 
-        seq,_,_,positions,mask = truncate_padding(all_inter, domain_mask, self.max_len, self.total_item_num)
+        seq,_,_,positions,mask = truncate_padding(all_inter, domain_mask, self.max_len, self.item_nums, self.domain_offsets)
         return (seq,pos,neg,positions,local_seqs,local_poses, local_negs, local_positions,target_domain,mask)
     
         

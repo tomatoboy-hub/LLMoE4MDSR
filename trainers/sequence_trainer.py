@@ -4,6 +4,8 @@ import time
 import pickle
 import torch
 from tqdm import tqdm
+from collections import defaultdict
+import numpy as np
 from trainers.trainer import Trainer
 from utils.utils import metric_report, metric_len_report, record_csv, metric_pop_report
 from utils.utils import metric_len_5group, metric_pop_5group
@@ -27,9 +29,7 @@ class SeqTrainer(Trainer):
         # 👈【最重要改善点】
         # self.generatorに頼るのではなく、self.train_loaderから直接datasetとvar_nameを取得
         var_names = self.train_loader.dataset.var_name
-        print(var_names)
         inputs = {name: data for name, data in zip(var_names, batch)}
-        print(inputs.keys())
         return inputs
     
     def _prepare_eval_inputs(self, batch, loader):
@@ -50,6 +50,8 @@ class SeqTrainer(Trainer):
         tr_loss = 0
         nb_tr_examples, nb_tr_steps = 0, 0
         train_time = []
+        # 👈【追加点1】このエポックの各損失コンポーネントを蓄積するための辞書を初期化
+        epoch_loss_components = defaultdict(list)
 
         self.model.train()
         prog_iter = tqdm(self.train_loader, leave=False, desc='Training')
@@ -66,14 +68,16 @@ class SeqTrainer(Trainer):
                     # tが単一のテンソルの場合、そのままGPUに送る
                     processed_batch.append(t.to(self.device))
             batch = tuple(processed_batch)
-            print(len(batch))
             
             #batch = tuple(t.to(self.device) for t in batch)
 
             train_start = time.time()
             inputs = self._prepare_train_inputs(batch)
-            print(inputs.keys())
-            loss = self.model(**inputs)
+            loss,loss_components = self.model(**inputs)
+             # 👈【追加点2】各バッチの損失をリストに蓄積
+            for loss_name, loss_value in loss_components.items():
+                epoch_loss_components[loss_name].append(loss_value.detach().item())
+            
             loss.backward()
 
             tr_loss += loss.item()
@@ -90,6 +94,16 @@ class SeqTrainer(Trainer):
             train_time.append(train_end-train_start)
 
         self.writer.add_scalar('train/loss', tr_loss / nb_tr_steps, epoch)
+        #次に、各コンポーネントの平均損失を記録
+        for loss_name, loss_list in epoch_loss_components.items():
+            avg_loss = np.mean(loss_list)
+            self.writer.add_scalar(f'train/epoch_avg_{loss_name}', avg_loss, epoch)
+        
+        print(tr_loss / nb_tr_steps)
+        print(f"  Epoch {epoch} Average Losses: "
+        f"Base: {np.mean(epoch_loss_components['base_loss']):.4f}, "
+        f"Reg: {np.mean(epoch_loss_components['reg_loss']):.4f}, "
+        f"User: {np.mean(epoch_loss_components['user_loss']):.4f}")
 
 
 

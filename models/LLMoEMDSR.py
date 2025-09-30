@@ -107,11 +107,20 @@ class LLMoEMDSR_base(BaseSeqModel):
             neg_labels_d = torch.zeros_like(neg_logits_d,device=self.device)
             indices_d = (pos_d != 0)
 
+            # もしこのドメインの有効なサンプルがバッチに1つもなければ、
+            # 損失を0.0として扱い、次のドメインの処理に進む
+            if not torch.any(indices_d):
+                domain_losses.append(torch.tensor(0.0, device=self.device))
+                continue
+
             pos_loss_d = self.loss_func(pos_logits_d[indices_d],pos_labels_d[indices_d])
             neg_loss_d = self.loss_func(neg_logits_d[indices_d],neg_labels_d[indices_d])
 
-            loss_d = pos_loss_d + neg_loss_d
-            domain_losses.append(loss_d.mean())
+            # loss_d = pos_loss_d + neg_loss_d
+            # domain_losses.append(loss_d.mean())
+            # .mean()は空テンソルでNaNを返すため、.sum() / .sum() の形がより安全
+            loss_d = (pos_loss_d.sum() + neg_loss_d.sum()) / indices_d.sum()
+            domain_losses.append(loss_d)
 
         loss = sum(domain_losses)
         return loss
@@ -166,7 +175,7 @@ class LLMoEMDSR(LLMoEMDSR_base):
                 user_id,
                 # さらに将来の拡張のためのkwargs (今回は未使用)
                 **kwargs):
-        loss = super().forward(
+        base_loss = super().forward(
             seq=seq, pos=pos, neg=neg, positions=positions,
             local_seqs=local_seqs, local_poses=local_poses, 
             local_negs=local_negs, local_positions=local_positions,
@@ -186,6 +195,12 @@ class LLMoEMDSR(LLMoEMDSR_base):
             
             if len(reg_i_ids) == 0 or len(reg_j_ids) == 0:
                 continue
+            # 1. 2つのリスト（テンソル）の短い方の長さに合わせる
+            min_len = min(len(reg_i_ids), len(reg_j_ids))
+            
+            # 2. 両方のリストを同じ長さ（min_len）に切り詰める
+            reg_i_ids = reg_i_ids[:min_len]
+            reg_j_ids = reg_j_ids[:min_len]
 
             reg_i_emb = self._get_embedding(reg_i_ids, domain_id = "global")
             reg_j_emb = self._get_embedding(reg_j_ids, domain_id = "global")
@@ -196,16 +211,21 @@ class LLMoEMDSR(LLMoEMDSR_base):
         if num_pairs > 0:
             total_reg_loss /= num_pairs
         
-        loss += self.alpha * total_reg_loss
-
-        seq = kwargs['seq']
-        positions = kwargs["positions"]
+        
 
         log_feats = self.log2feats(seq,positions,domain_id = "global")
         final_feat = log_feats[:,-1,:]
         llm_feats = self.user_emb_llm(user_id)
         llm_feats = self.user_adapter(llm_feats)
         user_loss = self.user_loss_func(llm_feats,final_feat)
-        loss += self.beta * user_loss
+        loss = base_loss + self.alpha * total_reg_loss + self.beta * user_loss
 
-        return loss
+        # 5. TensorBoardロギング用の辞書を作成
+        loss_components = {
+            "base_loss": base_loss,
+            "reg_loss": total_reg_loss,
+            "user_loss": user_loss
+        }
+        
+        # 6. 合計損失と、損失の内訳辞書の両方を返す
+        return loss, loss_components

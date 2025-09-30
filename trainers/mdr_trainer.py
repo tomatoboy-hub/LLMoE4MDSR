@@ -53,7 +53,18 @@ class MDRTrainer(SeqTrainer):
         target_domain = torch.empty(0).to(self.device)
 
         for batch in tqdm(test_loader, desc=desc):
-            inputs = self._prepare_eval_inputs(batch)
+            # 👈 修正後：tがリストかどうかを判定する
+            processed_batch = []
+            for t in batch:
+                if isinstance(t, list):
+                    # tがテンソルのリストの場合、リスト内の各テンソルをGPUに送る
+                    processed_batch.append([tensor.to(self.device) for tensor in t])
+                else:
+                    # tが単一のテンソルの場合、そのままGPUに送る
+                    processed_batch.append(t.to(self.device))
+            batch = tuple(processed_batch)
+
+            inputs = self._prepare_eval_inputs(batch,test_loader)
             target_domain = torch.cat([target_domain, inputs["target_domain"]])
             
             with torch.no_grad():
@@ -62,7 +73,16 @@ class MDRTrainer(SeqTrainer):
                 for i in range(self.num_domains):
                     pos_d = inputs["local_poses"][i]
                     neg_d = inputs["local_negs"][i]
-                    local_item_indices.append(torch.cat[pos_d.unsqueeze(1),neg_d],dim=1)
+                    
+                    
+                    try:
+                        # 修正済みの正しい構文
+                        concatenated_tensors = torch.cat([pos_d.unsqueeze(1), neg_d], dim=1)
+                        local_item_indices.append(concatenated_tensors)
+                    except Exception as e:
+                        print(f"!!! torch.cat FAILED for domain {i} !!!")
+                        print(f"Error: {e}")
+    
                 inputs["local_item_indices"] = local_item_indices
                 pred_logits = -self.model.predict(**inputs)
                 per_pred_rank = torch.argsort(torch.argsort(pred_logits))[:,0]
@@ -140,8 +160,13 @@ class MDRTrainer(SeqTrainer):
                 for i in range(self.num_domains):
                     pos_d = inputs["local_poses"][i]
                     neg_d = inputs["local_negs"][i]
-                    local_item_indices.append(torch.cat([pos_d.unsqueeze(1),neg_d],dim=1))
-        
+                    try:
+                        # 修正済みの正しい構文
+                        concatenated_tensors = torch.cat([pos_d.unsqueeze(1), neg_d], dim=1)
+                        local_item_indices.append(concatenated_tensors)
+                    except Exception as e:
+                        print(f"!!! torch.cat FAILED for domain {i} !!!")
+                        print(f"Error: {e}")
                 inputs["local_item_indices"] = local_item_indices
                 pred_logits = -self.model.predict(**inputs)
                 per_pred_rank = torch.argsort(torch.argsort(pred_logits))[:, 0]
